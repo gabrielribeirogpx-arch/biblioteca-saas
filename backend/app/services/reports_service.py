@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 
 from sqlalchemy import case, distinct, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -44,7 +44,7 @@ class ReportService:
 
     @staticmethod
     async def overdue_items(db: AsyncSession, library_id: int, limit: int = 100) -> list[OverdueItem]:
-        now = datetime.now(UTC)
+        now = datetime.now(timezone.utc)
         result = await db.execute(
             select(Loan.id, Loan.user_id, Loan.copy_id, Loan.due_date)
             .where(

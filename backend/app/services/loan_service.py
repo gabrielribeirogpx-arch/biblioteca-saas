@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import UTC, date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 
 from fastapi import HTTPException, status
 from sqlalchemy import Select, func, or_, select
@@ -29,7 +29,7 @@ class LoanService:
             library_id=library_id,
             user_id=user_id,
             copy_id=payload.copy_id,
-            due_date=datetime.combine(payload.due_date, datetime.min.time(), tzinfo=UTC),
+            due_date=datetime.combine(payload.due_date, datetime.min.time(), tzinfo=timezone.utc),
             status=LoanStatus.ACTIVE,
         )
         copy.status = CopyStatus.ON_LOAN
@@ -67,7 +67,7 @@ class LoanService:
         if loan.status == LoanStatus.RETURNED:
             return LoanService._to_schema(loan)
 
-        now = datetime.now(UTC)
+        now = datetime.now(timezone.utc)
         loan.returned_at = now
         loan.status = LoanStatus.RETURNED
 
@@ -98,7 +98,7 @@ class LoanService:
 
     @staticmethod
     async def mark_overdue_loans(db: AsyncSession, library_id: int) -> int:
-        now = datetime.now(UTC)
+        now = datetime.now(timezone.utc)
         result = await db.execute(
             select(Loan).where(
                 Loan.library_id == library_id,
