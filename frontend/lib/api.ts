@@ -71,8 +71,10 @@ class ApiError extends Error {
   }
 }
 
+const DEFAULT_API_URL = 'https://backend-biblioteca-saas-production.up.railway.app';
+
 function getApiBaseUrl(): string {
-  return process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000';
+  return process.env.NEXT_PUBLIC_API_URL ?? DEFAULT_API_URL;
 }
 
 function buildUrl(baseUrl: string, endpoint: string): string {
