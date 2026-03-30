@@ -25,6 +25,9 @@ class Book(Base):
         Index("ix_books_library_isbn", "library_id", "isbn"),
         Index("ix_books_library_fp_title_author", "library_id", "fingerprint_title_author"),
         Index("ix_books_library_fp_isbn", "library_id", "fingerprint_isbn"),
+        Index("ix_books_marc21_record_gin", "marc21_record", postgresql_using="gin"),
+        Index("ix_books_authors_gin", "authors", postgresql_using="gin"),
+        Index("ix_books_subjects_gin", "subjects", postgresql_using="gin"),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
