@@ -1,21 +1,34 @@
-from collections.abc import AsyncGenerator
+from __future__ import annotations
+
+from collections.abc import AsyncGenerator, Callable
 from dataclasses import dataclass
 
-from fastapi import Header, HTTPException, status
+from fastapi import Depends, Header, HTTPException, Request, status
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import AsyncSessionLocal
+from app.models.audit_log import AuditActorType, AuditCategory
+from app.models.library import Library
+from app.models.user import UserRole
+from app.schemas.auth import TokenPayload
+from app.services.audit_service import AuditService
+from app.services.auth_service import AuthService
 
 
 @dataclass(slots=True)
 class TenantContext:
     tenant_id: str
+    library_id: int
+    library_code: str
 
 
 @dataclass(slots=True)
 class AuthContext:
-    user_id: str
-    role: str
+    user_id: int
+    role: UserRole
+    library_id: int
 
 
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
@@ -23,24 +36,117 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
         yield db
 
 
-def resolve_tenant(x_tenant_id: str | None = Header(default=None)) -> TenantContext:
-    if not x_tenant_id:
+def _extract_subdomain(host: str | None) -> str | None:
+    if not host:
+        return None
+
+    hostname = host.split(":", 1)[0].strip().lower()
+    if not hostname:
+        return None
+
+    parts = hostname.split(".")
+
+    if hostname.endswith(".localhost") and len(parts) >= 2:
+        return parts[0]
+
+    if len(parts) >= 3:
+        return parts[0]
+
+    return None
+
+
+async def resolve_tenant(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
+) -> TenantContext:
+    tenant_key = x_tenant_id or _extract_subdomain(request.headers.get("host"))
+    if not tenant_key:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Missing required X-Tenant-ID header",
+            detail="Missing tenant identifier. Provide X-Tenant-ID header or tenant subdomain.",
         )
 
-    return TenantContext(tenant_id=x_tenant_id)
+    query = select(Library).where(Library.code == tenant_key)
+    if tenant_key.isdigit():
+        query = select(Library).where((Library.code == tenant_key) | (Library.id == int(tenant_key)))
+
+    library = (await db.execute(query)).scalar_one_or_none()
+    if not library:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tenant not found")
+
+    tenant_context = TenantContext(
+        tenant_id=library.code,
+        library_id=library.id,
+        library_code=library.code,
+    )
+    request.state.tenant_context = tenant_context
+    return tenant_context
 
 
-def get_auth_context(
-    x_user_id: str | None = Header(default=None),
-    x_user_role: str = Header(default="member"),
+_bearer = HTTPBearer(auto_error=False)
+
+
+async def get_auth_context(
+    request: Request,
+    tenant: TenantContext = Depends(resolve_tenant),
+    credentials: HTTPAuthorizationCredentials | None = Depends(_bearer),
 ) -> AuthContext:
-    if not x_user_id:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Missing required X-User-ID header",
-        )
+    if not credentials:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing bearer token")
 
-    return AuthContext(user_id=x_user_id, role=x_user_role)
+    payload: TokenPayload = AuthService.decode_access_token(credentials.credentials)
+    if payload.library_id != tenant.library_id:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token tenant mismatch")
+
+    auth_context = AuthContext(
+        user_id=payload.sub,
+        role=payload.role,
+        library_id=payload.library_id,
+    )
+    request.state.auth_context = auth_context
+    return auth_context
+
+
+def role_guard(*allowed_roles: UserRole) -> Callable[..., AuthContext]:
+    async def dependency(
+        request: Request,
+        db: AsyncSession = Depends(get_db),
+        auth: AuthContext = Depends(get_auth_context),
+    ) -> AuthContext:
+        if auth.role not in allowed_roles:
+            tenant = getattr(request.state, "tenant_context", None)
+            if tenant is not None:
+                await AuditService.log_event(
+                    db=db,
+                    library_id=tenant.library_id,
+                    category=AuditCategory.SECURITY,
+                    actor_type=AuditActorType.USER,
+                    actor_id=auth.user_id,
+                    action="rbac.permission_denied",
+                    entity_type="route",
+                    entity_id=f"{request.method} {request.url.path}",
+                    summary="Permission denied by role guard",
+                    payload={
+                        "required_roles": [role.value for role in allowed_roles],
+                        "actual_role": auth.role.value,
+                    },
+                    request_id=request.headers.get("x-request-id"),
+                    ip_address=request.client.host if request.client else None,
+                )
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Insufficient permissions")
+
+        request.state.auth_context = auth
+        return auth
+
+    return dependency
+
+
+require_admin = role_guard(UserRole.SUPER_ADMIN)
+require_librarian = role_guard(UserRole.SUPER_ADMIN, UserRole.LIBRARIAN)
+require_user = role_guard(
+    UserRole.SUPER_ADMIN,
+    UserRole.LIBRARIAN,
+    UserRole.ASSISTANT,
+    UserRole.MEMBER,
+)

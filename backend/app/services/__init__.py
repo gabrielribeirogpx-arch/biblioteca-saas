@@ -1,4 +1,4 @@
-from app.services.auth import AuthService
+from app.services.auth_service import AuthService
 from app.services.books import BookService
 from app.services.copies import CopyService
 from app.services.loans import LoanService
