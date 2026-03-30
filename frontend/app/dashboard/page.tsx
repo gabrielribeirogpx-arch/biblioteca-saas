@@ -1,21 +1,51 @@
+'use client';
+
 import { AppShell } from '../../components/ui/AppShell';
 import { MetricCard } from '../../components/ui/MetricCard';
-import { createApiClient } from '../../lib/api';
-import { getCurrentRole } from '../../lib/auth';
+import { useApi } from '../../hooks/useApi';
+import type { Book, Copy, Loan, UserRole } from '../../lib/api';
 
-async function getDashboardMetrics() {
-  const api = createApiClient({ tenantId: process.env.DEFAULT_TENANT_ID ?? 'default' });
+function getCollectionTotal<T>(payload: unknown): number {
+  if (Array.isArray(payload)) {
+    return payload.length;
+  }
 
-  const result = await api
-    .getSummaryReport()
-    .catch(() => ({ total_books: 0, total_copies: 0, active_loans: 0 }));
+  if (payload && typeof payload === 'object') {
+    const result = payload as { items?: T[]; data?: T[]; total?: number; count?: number };
 
-  return result;
+    if (Array.isArray(result.items)) {
+      return result.items.length;
+    }
+
+    if (Array.isArray(result.data)) {
+      return result.data.length;
+    }
+
+    if (typeof result.total === 'number') {
+      return result.total;
+    }
+
+    if (typeof result.count === 'number') {
+      return result.count;
+    }
+  }
+
+  return 0;
 }
 
-export default async function DashboardPage() {
-  const role = getCurrentRole();
-  const metrics = await getDashboardMetrics();
+export default function DashboardPage() {
+  const role: UserRole = 'librarian';
+
+  const booksState = useApi<Book[] | { items?: Book[]; data?: Book[]; total?: number; count?: number }>('/api/v1/books');
+  const copiesState = useApi<Copy[] | { items?: Copy[]; data?: Copy[]; total?: number; count?: number }>('/api/v1/copies');
+  const loansState = useApi<Loan[] | { items?: Loan[]; data?: Loan[]; total?: number; count?: number }>('/api/v1/loans');
+
+  const isLoading = booksState.loading || copiesState.loading || loansState.loading;
+  const hasError = booksState.error || copiesState.error || loansState.error;
+
+  const totalBooks = getCollectionTotal<Book>(booksState.data);
+  const totalCopies = getCollectionTotal<Copy>(copiesState.data);
+  const activeLoans = getCollectionTotal<Loan>(loansState.data);
 
   return (
     <AppShell
@@ -23,10 +53,18 @@ export default async function DashboardPage() {
       title="Dashboard"
       subtitle="Monitor catalog health, circulation throughput, and tenant readiness."
     >
+      {isLoading ? (
+        <div className="rounded-xl border bg-white p-4 text-sm text-slate-600 shadow-sm">Carregando dados...</div>
+      ) : null}
+
+      {hasError ? (
+        <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700 shadow-sm">Erro ao carregar dados</div>
+      ) : null}
+
       <div className="grid gap-4 md:grid-cols-3">
-        <MetricCard helper="MARC21-compliant bibliographic entries" label="Total Books" value={metrics.total_books} />
-        <MetricCard helper="Inventory across branches and collections" label="Total Copies" value={metrics.total_copies} />
-        <MetricCard helper="Loans currently in active state" label="Active Loans" value={metrics.active_loans} />
+        <MetricCard helper="MARC21-compliant bibliographic entries" label="Total Books" value={totalBooks} />
+        <MetricCard helper="Inventory across branches and collections" label="Total Copies" value={totalCopies} />
+        <MetricCard helper="Loans currently in active state" label="Active Loans" value={activeLoans} />
       </div>
     </AppShell>
   );
