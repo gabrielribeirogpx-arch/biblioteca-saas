@@ -1,4 +1,5 @@
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
 from app.routers import auth, books, copies, loans, reports, search, users
 
@@ -8,6 +9,19 @@ def create_app() -> FastAPI:
         title="Library SaaS API",
         description="Multi-tenant enterprise-grade library management API",
         version="1.0.0",
+    )
+
+    origins = [
+        "https://front-biblioteca-saas.vercel.app",
+        "http://localhost:3000",
+    ]
+
+    application.add_middleware(
+        CORSMiddleware,
+        allow_origins=origins,
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
     )
 
     application.include_router(auth.router, prefix="/api/v1/auth", tags=["auth"])
