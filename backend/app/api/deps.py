@@ -1,10 +1,10 @@
-from collections.abc import Generator
+from collections.abc import AsyncGenerator
 from dataclasses import dataclass
 
 from fastapi import Header, HTTPException, status
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.session import SessionLocal
+from app.db.session import AsyncSessionLocal
 
 
 @dataclass(slots=True)
@@ -18,12 +18,9 @@ class AuthContext:
     role: str
 
 
-def get_db_session() -> Generator[Session, None, None]:
-    db = SessionLocal()
-    try:
+async def get_db() -> AsyncGenerator[AsyncSession, None]:
+    async with AsyncSessionLocal() as db:
         yield db
-    finally:
-        db.close()
 
 
 def resolve_tenant(x_tenant_id: str | None = Header(default=None)) -> TenantContext:
