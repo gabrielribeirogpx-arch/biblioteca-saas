@@ -1,7 +1,3 @@
-from app.schemas.reports import ReportSummary
+from app.services.reports_service import ReportService
 
-
-class ReportService:
-    @staticmethod
-    def get_summary(tenant_id: str) -> ReportSummary:  # noqa: ARG004
-        return ReportSummary(total_books=120, total_copies=320, active_loans=37)
+__all__ = ["ReportService"]

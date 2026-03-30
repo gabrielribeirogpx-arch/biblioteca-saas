@@ -1,11 +1,15 @@
 from datetime import date
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class LoanCreate(BaseModel):
     copy_id: int
     due_date: date
+
+
+class LoanRenewRequest(BaseModel):
+    renewal_days: int = Field(default=14, ge=1, le=30)
 
 
 class LoanOut(LoanCreate):
