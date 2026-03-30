@@ -119,15 +119,15 @@ export async function apiFetch<T>(endpoint: string, options?: RequestInit, baseU
 }
 
 export async function getBooks(): Promise<Book[]> {
-  return apiFetch<Book[]>('/api/v1/books');
+  return apiFetch<Book[]>('/api/v1/books/');
 }
 
 export async function getCopies(): Promise<Copy[]> {
-  return apiFetch<Copy[]>('/api/v1/copies');
+  return apiFetch<Copy[]>('/api/v1/copies/');
 }
 
 export async function getLoans(): Promise<Loan[]> {
-  return apiFetch<Loan[]>('/api/v1/loans');
+  return apiFetch<Loan[]>('/api/v1/loans/');
 }
 
 export async function getUsers(): Promise<User[]> {

@@ -84,13 +84,13 @@ export default function DashboardPage() {
       const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL;
       console.log('NEXT_PUBLIC_API_URL:', apiBaseUrl ?? '(undefined - usando fallback)');
 
-      const books = await apiFetch<CollectionPayload<Book>>('/api/v1/books');
+      const books = await apiFetch<CollectionPayload<Book>>('/api/v1/books/');
       console.log('BOOKS RAW:', books);
 
-      const copies = await apiFetch<CollectionPayload<Copy>>('/api/v1/copies');
+      const copies = await apiFetch<CollectionPayload<Copy>>('/api/v1/copies/');
       console.log('COPIES RAW:', copies);
 
-      const loans = await apiFetch<CollectionPayload<Loan>>('/api/v1/loans');
+      const loans = await apiFetch<CollectionPayload<Loan>>('/api/v1/loans/');
       console.log('LOANS RAW:', loans);
 
       if (isMounted) {
