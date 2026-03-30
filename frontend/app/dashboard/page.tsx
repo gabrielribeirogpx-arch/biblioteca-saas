@@ -6,37 +6,47 @@ import { AppShell } from '../../components/ui/AppShell';
 import { MetricCard } from '../../components/ui/MetricCard';
 import { apiFetch, type Book, type Copy, type Loan, type UserRole } from '../../lib/api';
 
+type CollectionPayload<T> =
+  | T[]
+  | { items?: T[]; data?: T[]; dados?: T[]; total?: number; count?: number }
+  | null
+  | undefined;
+
 interface DashboardState {
-  books: Book[] | { items?: Book[]; data?: Book[]; total?: number; count?: number } | null;
-  copies: Copy[] | { items?: Copy[]; data?: Copy[]; total?: number; count?: number } | null;
-  loans: Loan[] | { items?: Loan[]; data?: Loan[]; total?: number; count?: number } | null;
+  books: CollectionPayload<Book>;
+  copies: CollectionPayload<Copy>;
+  loans: CollectionPayload<Loan>;
   loading: boolean;
   error: string | null;
 }
 
-function getCollectionTotal<T>(payload: unknown): number {
+function getCollectionTotal<T>(payload: CollectionPayload<T>): number {
+  if (!payload) {
+    return 0;
+  }
+
   if (Array.isArray(payload)) {
     return payload.length;
   }
 
-  if (payload && typeof payload === 'object') {
-    const result = payload as { items?: T[]; data?: T[]; total?: number; count?: number };
+  if (payload?.items && Array.isArray(payload.items)) {
+    return payload.items.length;
+  }
 
-    if (Array.isArray(result.items)) {
-      return result.items.length;
-    }
+  if (payload?.dados && Array.isArray(payload.dados)) {
+    return payload.dados.length;
+  }
 
-    if (Array.isArray(result.data)) {
-      return result.data.length;
-    }
+  if (payload?.data && Array.isArray(payload.data)) {
+    return payload.data.length;
+  }
 
-    if (typeof result.total === 'number') {
-      return result.total;
-    }
+  if (typeof payload?.total === 'number') {
+    return payload.total;
+  }
 
-    if (typeof result.count === 'number') {
-      return result.count;
-    }
+  if (typeof payload?.count === 'number') {
+    return payload.count;
   }
 
   return 0;
@@ -74,11 +84,14 @@ export default function DashboardPage() {
       const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL;
       console.log('NEXT_PUBLIC_API_URL:', apiBaseUrl ?? '(undefined - usando fallback)');
 
-      const [books, copies, loans] = await Promise.all([
-        apiFetch<Book[] | { items?: Book[]; data?: Book[]; total?: number; count?: number }>('/api/v1/books'),
-        apiFetch<Copy[] | { items?: Copy[]; data?: Copy[]; total?: number; count?: number }>('/api/v1/copies'),
-        apiFetch<Loan[] | { items?: Loan[]; data?: Loan[]; total?: number; count?: number }>('/api/v1/loans')
-      ]);
+      const books = await apiFetch<CollectionPayload<Book>>('/api/v1/books');
+      console.log('BOOKS RAW:', books);
+
+      const copies = await apiFetch<CollectionPayload<Copy>>('/api/v1/copies');
+      console.log('COPIES RAW:', copies);
+
+      const loans = await apiFetch<CollectionPayload<Loan>>('/api/v1/loans');
+      console.log('LOANS RAW:', loans);
 
       if (isMounted) {
         setState({ books, copies, loans, loading: false, error: null });
@@ -86,7 +99,7 @@ export default function DashboardPage() {
     }
 
     fetchDashboardData().catch((error: unknown) => {
-      console.error('Erro completo ao carregar dashboard:', error);
+      console.error('Erro completo:', error);
       if (isMounted) {
         const message = error instanceof Error ? error.message : 'Erro ao carregar dados';
         setState({ books: null, copies: null, loans: null, loading: false, error: message });
