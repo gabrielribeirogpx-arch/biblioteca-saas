@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import urllib.error
 import urllib.request
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from typing import Any
 
 from sqlalchemy import select
@@ -83,7 +83,7 @@ class SearchService:
             "subjects": book.subjects,
             "category": book.category.value,
             "publication_year": book.publication_year,
-            "updated_at": datetime.now(UTC).isoformat(),
+            "updated_at": datetime.now(timezone.utc).isoformat(),
         }
         SearchService._request("PUT", f"/{SearchService._index_name(tenant_id)}/_doc/{book.id}", doc)
 

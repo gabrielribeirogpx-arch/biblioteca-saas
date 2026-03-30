@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from decimal import Decimal
 
 from sqlalchemy import or_, select
@@ -15,7 +15,7 @@ class FineService:
 
     @staticmethod
     async def assess_overdue_fines(db: AsyncSession, library_id: int) -> int:
-        now = datetime.now(UTC)
+        now = datetime.now(timezone.utc)
         overdue_loans = (
             await db.execute(
                 select(Loan).where(

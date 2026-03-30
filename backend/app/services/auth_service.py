@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 import jwt
 from fastapi import HTTPException, status
@@ -31,7 +31,7 @@ class AuthService:
     @staticmethod
     def create_access_token(payload: TokenPayload) -> str:
         expires_delta = timedelta(minutes=settings.JWT_ACCESS_TOKEN_EXPIRE_MINUTES)
-        exp = datetime.now(UTC) + expires_delta
+        exp = datetime.now(timezone.utc) + expires_delta
         encoded = jwt.encode(
             {
                 "sub": payload.sub,

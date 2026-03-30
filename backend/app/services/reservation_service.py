@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from fastapi import HTTPException, status
 from sqlalchemy import select
@@ -30,7 +30,7 @@ class ReservationService:
         db.add(reservation)
         if copy.status == CopyStatus.AVAILABLE:
             reservation.status = ReservationStatus.READY
-            reservation.expires_at = datetime.now(UTC) + timedelta(days=ReservationService.HOLD_DAYS)
+            reservation.expires_at = datetime.now(timezone.utc) + timedelta(days=ReservationService.HOLD_DAYS)
             copy.status = CopyStatus.RESERVED
 
         await db.commit()
@@ -55,7 +55,7 @@ class ReservationService:
             return None
 
         queue.status = ReservationStatus.READY
-        queue.expires_at = datetime.now(UTC) + timedelta(days=ReservationService.HOLD_DAYS)
+        queue.expires_at = datetime.now(timezone.utc) + timedelta(days=ReservationService.HOLD_DAYS)
         copy = (
             await db.execute(select(Copy).where(Copy.library_id == library_id, Copy.id == copy_id))
         ).scalar_one_or_none()
@@ -68,7 +68,7 @@ class ReservationService:
 
     @staticmethod
     async def expire_ready_reservations(db: AsyncSession, library_id: int) -> int:
-        now = datetime.now(UTC)
+        now = datetime.now(timezone.utc)
         reservations = (
             await db.execute(
                 select(Reservation).where(
