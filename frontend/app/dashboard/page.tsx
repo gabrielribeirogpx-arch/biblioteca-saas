@@ -63,35 +63,18 @@ export default function DashboardPage() {
   });
 
   useEffect(() => {
-    console.log('useEffect rodando');
-  }, []);
-
-  useEffect(() => {
-    console.log('Chamando API...');
-
-    fetch('https://backend-biblioteca-saas-production.up.railway.app/health', { cache: 'no-store' })
-      .then((res) => res.json())
-      .then((data) => console.log('API OK:', data))
-      .catch((err) => console.error('Erro fetch:', err));
-  }, []);
-
-  useEffect(() => {
     let isMounted = true;
 
     async function fetchDashboardData() {
       setState({ books: null, copies: null, loans: null, loading: true, error: null });
 
-      const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL;
-      console.log('NEXT_PUBLIC_API_URL:', apiBaseUrl ?? '(undefined - usando fallback)');
+      await apiFetch<{ status: string }>('/health');
 
       const books = await apiFetch<CollectionPayload<Book>>('/api/v1/books/');
-      console.log('BOOKS RAW:', books);
 
       const copies = await apiFetch<CollectionPayload<Copy>>('/api/v1/copies/');
-      console.log('COPIES RAW:', copies);
 
       const loans = await apiFetch<CollectionPayload<Loan>>('/api/v1/loans/');
-      console.log('LOANS RAW:', loans);
 
       if (isMounted) {
         setState({ books, copies, loans, loading: false, error: null });
@@ -99,7 +82,6 @@ export default function DashboardPage() {
     }
 
     fetchDashboardData().catch((error: unknown) => {
-      console.error('Erro completo:', error);
       if (isMounted) {
         const message = error instanceof Error ? error.message : 'Erro ao carregar dados';
         setState({ books: null, copies: null, loans: null, loading: false, error: message });
