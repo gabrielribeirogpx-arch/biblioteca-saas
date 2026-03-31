@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 
+import { ProtectedRoute } from '../../components/auth/ProtectedRoute';
 import { AppShell } from '../../components/ui/AppShell';
 import { DataTable } from '../../components/ui/DataTable';
 import { apiFetch, getStoredToken, type Book } from '../../lib/api';
@@ -51,7 +52,8 @@ export default function CatalogPage() {
   }, []);
 
   return (
-    <AppShell
+    <ProtectedRoute>
+      <AppShell
       role={role}
       title="Catalog"
       subtitle="Search and review AACR2-ready catalog records in one operational queue."
@@ -68,6 +70,7 @@ export default function CatalogPage() {
         searchableFields={['title', 'isbn', 'authors']}
         title="Catalog Records"
       />
-    </AppShell>
+      </AppShell>
+    </ProtectedRoute>
   );
 }

@@ -78,15 +78,12 @@ export function getStoredToken(): string | null {
   if (typeof window === 'undefined') {
     return null;
   }
+
   return window.localStorage.getItem('token');
 }
 
 function getApiBaseUrl(): string {
   return process.env.NEXT_PUBLIC_API_URL ?? DEFAULT_API_URL;
-}
-
-function getDefaultTenantId(): string {
-  return process.env.NEXT_PUBLIC_DEFAULT_TENANT_ID ?? DEFAULT_TENANT_ID;
 }
 
 function buildUrl(baseUrl: string, endpoint: string): string {
@@ -99,58 +96,53 @@ function buildUrl(baseUrl: string, endpoint: string): string {
   return `${normalizedBase}${normalizedEndpoint}`;
 }
 
-export async function apiFetch<T>(endpoint: string, options?: RequestInit, baseUrl = getApiBaseUrl()): Promise<T | null> {
-  const url = buildUrl(baseUrl, endpoint);
+export async function apiFetch<T = unknown>(url: string, options: RequestInit = {}): Promise<T | null> {
+  const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
 
-  const headers = new Headers(options?.headers);
-  const isTenantScopedEndpoint = endpoint.startsWith('/api/v1/');
-  const providedAuthHeader = headers.get('Authorization');
-  const token = providedAuthHeader ? null : getStoredToken();
+  const headers = new Headers(options.headers);
+  if (!headers.has('Content-Type') && options.body) {
+    headers.set('Content-Type', 'application/json');
+  }
 
   if (!headers.has('Accept')) {
     headers.set('Accept', 'application/json');
   }
 
-  if (isTenantScopedEndpoint && !headers.has('X-Tenant-ID')) {
-    headers.set('X-Tenant-ID', getDefaultTenantId());
+  if (url.startsWith('/api/v1/') && !headers.has('X-Tenant-ID')) {
+    headers.set('X-Tenant-ID', process.env.NEXT_PUBLIC_DEFAULT_TENANT_ID ?? DEFAULT_TENANT_ID);
   }
 
-  const hasBody = options?.body !== undefined && options?.body !== null;
-  if (hasBody && !headers.has('Content-Type')) {
-    headers.set('Content-Type', 'application/json');
-  }
-
-  if (isTenantScopedEndpoint && !providedAuthHeader) {
-    if (!token) {
-      return null;
-    }
+  if (token && !headers.has('Authorization')) {
     headers.set('Authorization', `Bearer ${token}`);
   }
 
-  const response = await fetch(url, {
+  const response = await fetch(buildUrl(getApiBaseUrl(), url), {
     ...options,
     headers,
     cache: 'no-store'
   });
 
-  const contentType = response.headers.get('content-type') ?? '';
-
-  let responseBody: unknown = null;
-  if (contentType.includes('application/json')) {
-    responseBody = await response.json();
-  } else {
-    responseBody = await response.text();
+  if (response.status === 401) {
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('token');
+      localStorage.removeItem('user_email');
+      window.location.href = '/login';
+    }
+    return null;
   }
 
   if (!response.ok) {
-    if (response.status === 401 && typeof window !== 'undefined') {
-      window.localStorage.removeItem('token');
-    }
-    const body = typeof responseBody === 'string' ? responseBody : JSON.stringify(responseBody);
-    throw new ApiError(`API request failed for ${endpoint}`, response.status, body);
+    const body = await response.text();
+    throw new ApiError(`API request failed for ${url}`, response.status, body);
   }
 
-  return responseBody as T;
+  const contentType = response.headers.get('content-type') ?? '';
+
+  if (!contentType.includes('application/json')) {
+    return null;
+  }
+
+  return (await response.json()) as T;
 }
 
 export async function getBooks(): Promise<Book[]> {
@@ -202,7 +194,7 @@ export class ApiClient {
     return apiFetch<T>(`/api/v1${path}`, {
       ...init,
       headers
-    }, this.baseUrl);
+    });
   }
 
   listBooks(): Promise<Book[] | null> {

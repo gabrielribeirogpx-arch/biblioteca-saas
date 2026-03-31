@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 
+import { ProtectedRoute } from '../../components/auth/ProtectedRoute';
 import { AppShell } from '../../components/ui/AppShell';
 import { DataTable } from '../../components/ui/DataTable';
 import { apiFetch, getStoredToken, type User } from '../../lib/api';
@@ -51,7 +52,8 @@ export default function UsersPage() {
   }, []);
 
   return (
-    <AppShell
+    <ProtectedRoute>
+      <AppShell
       role={role}
       title="Users"
       subtitle="Administer tenant user access and role assignments for secure operations."
@@ -68,6 +70,7 @@ export default function UsersPage() {
         searchableFields={['full_name', 'email', 'role']}
         title="Tenant Users"
       />
-    </AppShell>
+      </AppShell>
+    </ProtectedRoute>
   );
 }

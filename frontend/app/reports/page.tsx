@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 
+import { ProtectedRoute } from '../../components/auth/ProtectedRoute';
 import { AppShell } from '../../components/ui/AppShell';
 import { DataTable } from '../../components/ui/DataTable';
 import { MetricCard } from '../../components/ui/MetricCard';
@@ -68,7 +69,8 @@ export default function ReportsPage() {
   }, []);
 
   return (
-    <AppShell
+    <ProtectedRoute>
+      <AppShell
       role={role}
       title="Reports"
       subtitle="Review high-impact operational indicators for policy and performance workflows."
@@ -99,6 +101,7 @@ export default function ReportsPage() {
         searchableFields={['loan_id', 'user_id', 'copy_id']}
         title="Overdue Loans"
       />
-    </AppShell>
+      </AppShell>
+    </ProtectedRoute>
   );
 }
