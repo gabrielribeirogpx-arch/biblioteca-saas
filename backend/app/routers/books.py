@@ -24,7 +24,6 @@ router = APIRouter()
 async def list_books(
     db: AsyncSession = Depends(get_db),
     tenant: TenantContext = Depends(resolve_tenant),
-    auth: AuthContext = Depends(require_user),
 ) -> list[BookOut]:
     return await BookService.list_books(db, tenant.library_id)
 
