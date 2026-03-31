@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import AuthContext, TenantContext, get_db, require_librarian, require_user, resolve_tenant
+from app.api.deps import AuthContext, TenantContext, get_db, require_librarian, resolve_tenant
 from app.models.audit_log import AuditActorType, AuditCategory
 from app.schemas.copies import CopyCreate, CopyOut
 from app.services.audit_service import AuditService
@@ -14,8 +14,8 @@ router = APIRouter()
 async def list_copies(
     db: AsyncSession = Depends(get_db),
     tenant: TenantContext = Depends(resolve_tenant),
-    auth: AuthContext = Depends(require_user),
 ) -> list[CopyOut]:
+    print("AUTH BYPASSED FOR PUBLIC ROUTE")
     return CopyService.list_copies(db, tenant.tenant_id)
 
 

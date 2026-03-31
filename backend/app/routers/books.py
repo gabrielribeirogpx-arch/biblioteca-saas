@@ -25,6 +25,7 @@ async def list_books(
     db: AsyncSession = Depends(get_db),
     tenant: TenantContext = Depends(resolve_tenant),
 ) -> list[BookOut]:
+    print("AUTH BYPASSED FOR PUBLIC ROUTE")
     return await BookService.list_books(db, tenant.library_id)
 
 
