@@ -1,4 +1,5 @@
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Body, Depends, HTTPException, Query, status
+from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_db
@@ -10,9 +11,20 @@ router = APIRouter()
 
 @router.post("/register", response_model=RegisterResponse)
 async def register(
-    payload: RegisterRequest,
+    request_data: dict = Body(...),
     db: AsyncSession = Depends(get_db),
 ) -> RegisterResponse:
+    print(request_data)
+    try:
+        payload = RegisterRequest.model_validate(request_data)
+    except ValidationError as exc:
+        validation_errors = exc.errors()
+        print(validation_errors)
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=validation_errors,
+        ) from exc
+
     return await TenantService.register_tenant_admin(db, payload)
 
 
