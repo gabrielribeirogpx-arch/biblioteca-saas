@@ -46,4 +46,5 @@ def root() -> dict[str, str]:
 
 @app.get("/health", tags=["health"])
 def health() -> dict[str, str]:
+    print("AUTH BYPASSED FOR PUBLIC ROUTE")
     return {"status": "ok"}
