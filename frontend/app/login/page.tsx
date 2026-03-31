@@ -1,6 +1,7 @@
 'use client';
 
-import { useRouter } from 'next/navigation';
+import Link from 'next/link';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { FormEvent, useEffect, useState } from 'react';
 
 import { useAuth } from '../../context/AuthContext';
@@ -8,16 +9,22 @@ import { useAuth } from '../../context/AuthContext';
 export default function LoginPage() {
   const { login, isAuthenticated, isLoading } = useAuth();
   const router = useRouter();
-  const [email, setEmail] = useState('');
+  const searchParams = useSearchParams();
+  const [email, setEmail] = useState(searchParams.get('email') ?? '');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const tenantParam = searchParams.get('tenant') ?? undefined;
 
   useEffect(() => {
     if (!isLoading && isAuthenticated) {
+      if (tenantParam) {
+        router.replace(`/t/${tenantParam}/dashboard`);
+        return;
+      }
       router.replace('/dashboard');
     }
-  }, [isAuthenticated, isLoading, router]);
+  }, [isAuthenticated, isLoading, router, tenantParam]);
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -25,7 +32,11 @@ export default function LoginPage() {
     setSubmitting(true);
 
     try {
-      await login(email, password);
+      await login(email, password, tenantParam);
+      if (tenantParam) {
+        router.replace(`/t/${tenantParam}/dashboard`);
+        return;
+      }
       router.replace('/dashboard');
     } catch (submitError) {
       setError(submitError instanceof Error ? submitError.message : 'Falha ao autenticar');
@@ -73,6 +84,10 @@ export default function LoginPage() {
         >
           {submitting ? 'Entrando...' : 'Entrar'}
         </button>
+
+        <Link className="block text-center text-sm font-medium text-brand-700 hover:text-brand-800" href="/register">
+          Criar conta
+        </Link>
       </form>
     </main>
   );
