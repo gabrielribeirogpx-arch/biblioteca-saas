@@ -10,7 +10,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.models.audit_log import AuditActorType, AuditCategory
-from app.models.library import Library
 from app.models.user import User
 from app.schemas.auth import LoginRequest, TokenPayload, TokenResponse
 from app.services.audit_service import AuditService
@@ -67,14 +66,7 @@ class AuthService:
             ) from exc
 
     @staticmethod
-    async def login(db: AsyncSession, payload: LoginRequest, tenant_id: str) -> TokenResponse:
-        query = select(Library).where(Library.code == tenant_id)
-        if tenant_id.isdigit():
-            query = select(Library).where((Library.code == tenant_id) | (Library.id == int(tenant_id)))
-        library = (await db.execute(query)).scalar_one_or_none()
-        if not library:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tenant not found")
-
+    async def login(db: AsyncSession, payload: LoginRequest, library_id: int) -> TokenResponse:
         login_identifier = (payload.email or payload.username or "").strip().lower()
         if not login_identifier:
             raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="email is required")
@@ -82,7 +74,7 @@ class AuthService:
         user = (
             await db.execute(
                 select(User).where(
-                    User.library_id == library.id,
+                    User.library_id == library_id,
                     User.email == login_identifier,
                 )
             )
@@ -91,7 +83,7 @@ class AuthService:
         if not user or not user.is_active or not AuthService.verify_password(payload.password, user.password_hash):
             await AuditService.log_event(
                 db=db,
-                library_id=library.id,
+                library_id=library_id,
                 category=AuditCategory.AUTH,
                 actor_type=AuditActorType.SYSTEM,
                 actor_id=None,
@@ -103,12 +95,12 @@ class AuthService:
             )
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
 
-        token_payload = TokenPayload(sub=user.id, role=user.role, library_id=library.id)
+        token_payload = TokenPayload(sub=user.id, role=user.role, library_id=library_id)
         access_token = AuthService.create_access_token(token_payload)
 
         await AuditService.log_event(
             db=db,
-            library_id=library.id,
+            library_id=library_id,
             category=AuditCategory.AUTH,
             actor_type=AuditActorType.USER,
             actor_id=user.id,

@@ -106,6 +106,25 @@ async def resolve_tenant(
     return tenant_context
 
 
+async def get_tenant_from_request(request: Request, db: AsyncSession) -> Library | None:
+    tenant_key = (
+        request.headers.get("X-Tenant-ID")
+        or request.query_params.get("tenant")
+    )
+    if not tenant_key:
+        return None
+
+    tenant_key = tenant_key.strip()
+    if not tenant_key:
+        return None
+
+    query = select(Library).where(Library.code == tenant_key)
+    if tenant_key.isdigit():
+        query = select(Library).where((Library.code == tenant_key) | (Library.id == int(tenant_key)))
+
+    return (await db.execute(query)).scalar_one_or_none()
+
+
 _bearer = HTTPBearer(auto_error=False)
 
 
