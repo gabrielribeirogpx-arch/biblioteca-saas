@@ -148,7 +148,6 @@ class TenantService:
                 is_active=True,
             )
             db.add(admin_user)
-            await db.flush()
             await db.commit()
 
             token = AuthService.create_access_token(
