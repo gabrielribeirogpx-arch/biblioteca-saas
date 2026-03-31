@@ -32,6 +32,12 @@ class AuthContext:
 
 
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
+    if AsyncSessionLocal is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Database is temporarily unavailable.",
+        )
+
     async with AsyncSessionLocal() as db:
         yield db
 

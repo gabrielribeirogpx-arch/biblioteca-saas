@@ -21,9 +21,23 @@ class Settings(BaseSettings):
     @classmethod
     def validate_async_database_url(cls, value: str) -> str:
         if value.startswith("postgresql+asyncpg://"):
-            return value
+            suffix = value[len("postgresql+asyncpg://") :]
+            if suffix.startswith("postgresql://"):
+                suffix = suffix[len("postgresql://") :]
+            if suffix.startswith("postgresql+asyncpg://"):
+                suffix = suffix[len("postgresql+asyncpg://") :]
+            return f"postgresql+asyncpg://{suffix}"
+        if value.startswith("postgresql://postgresql://"):
+            value = value.replace("postgresql://postgresql://", "postgresql://", 1)
+        if value.startswith("postgresql://postgresql+asyncpg://"):
+            value = value.replace("postgresql://postgresql+asyncpg://", "postgresql://", 1)
         if value.startswith("postgresql://"):
-            return value.replace("postgresql://", "postgresql+asyncpg://", 1)
+            suffix = value[len("postgresql://") :]
+            if suffix.startswith("postgresql://"):
+                suffix = suffix[len("postgresql://") :]
+            if suffix.startswith("postgresql+asyncpg://"):
+                suffix = suffix[len("postgresql+asyncpg://") :]
+            return f"postgresql+asyncpg://{suffix}"
         raise ValueError("DATABASE_URL must use postgresql:// or postgresql+asyncpg:// format")
 
     @field_validator("CORS_ALLOW_ORIGINS", mode="before")
