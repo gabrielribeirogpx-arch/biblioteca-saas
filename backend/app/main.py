@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.core.config import settings
 from app.routers import auth, books, copies, loans, reports, search, users
 
 
@@ -8,17 +9,12 @@ app = FastAPI()
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "https://front-biblioteca-saas.vercel.app",
-        "http://localhost:3000",
-    ],
+    allow_origins=settings.CORS_ALLOW_ORIGINS,
+    allow_origin_regex=settings.CORS_ALLOW_ORIGIN_REGEX,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-print("🚀 FastAPI started")
-print("CORS middleware loaded")
 
 app.include_router(auth.router, prefix="/api/v1/auth", tags=["auth"])
 app.include_router(books.router, prefix="/api/v1/books", tags=["books"])

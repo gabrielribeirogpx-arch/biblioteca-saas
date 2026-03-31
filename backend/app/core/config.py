@@ -9,6 +9,11 @@ class Settings(BaseSettings):
     JWT_SECRET_KEY: str = "change-me-in-production"
     JWT_ALGORITHM: str = "HS256"
     JWT_ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
+    CORS_ALLOW_ORIGINS: list[str] = [
+        "https://front-biblioteca-saas.vercel.app",
+        "http://localhost:3000",
+    ]
+    CORS_ALLOW_ORIGIN_REGEX: str = r"^https://.*\.vercel\.app$"
 
     @field_validator("DATABASE_URL")
     @classmethod
@@ -18,6 +23,13 @@ class Settings(BaseSettings):
         if value.startswith("postgresql://"):
             return value.replace("postgresql://", "postgresql+asyncpg://", 1)
         raise ValueError("DATABASE_URL must use postgresql:// or postgresql+asyncpg:// format")
+
+    @field_validator("CORS_ALLOW_ORIGINS", mode="before")
+    @classmethod
+    def parse_cors_allow_origins(cls, value: str | list[str]) -> list[str]:
+        if isinstance(value, str):
+            return [origin.strip() for origin in value.split(",") if origin.strip()]
+        return value
 
 
 settings = Settings()
