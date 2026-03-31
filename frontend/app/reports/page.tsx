@@ -1,34 +1,71 @@
+'use client';
+
+import { useEffect, useState } from 'react';
+
 import { AppShell } from '../../components/ui/AppShell';
 import { DataTable } from '../../components/ui/DataTable';
 import { MetricCard } from '../../components/ui/MetricCard';
-import { createApiClient } from '../../lib/api';
-import { getCurrentRole } from '../../lib/auth';
+import { apiFetch, getStoredToken, type MostBorrowedItem, type OverdueItem } from '../../lib/api';
 
-async function loadReportRows() {
-  const api = createApiClient({ tenantId: process.env.DEFAULT_TENANT_ID ?? 'default' });
-
-  const [mostBorrowed, overdue] = await Promise.all([
-    api.listMostBorrowed(10).catch(() => []),
-    api.listOverdue(20).catch(() => [])
-  ]);
-
-  return {
-    mostBorrowed: mostBorrowed.map((item) => ({
-      title: item.title,
-      checkout_count: item.checkout_count
-    })),
-    overdue: overdue.map((item) => ({
-      loan_id: item.loan_id,
-      user_id: item.user_id,
-      copy_id: item.copy_id,
-      overdue_days: item.overdue_days
-    }))
-  };
+interface MostBorrowedRow {
+  [key: string]: string | number | null | undefined;
+  title: string;
+  checkout_count: number;
 }
 
-export default async function ReportsPage() {
-  const role = getCurrentRole();
-  const reportData = await loadReportRows();
+interface OverdueRow {
+  [key: string]: string | number | null | undefined;
+  loan_id: number;
+  user_id: number;
+  copy_id: number;
+  overdue_days: number;
+}
+
+export default function ReportsPage() {
+  const role = 'librarian';
+  const [reportData, setReportData] = useState<{ mostBorrowed: MostBorrowedRow[]; overdue: OverdueRow[] }>({
+    mostBorrowed: [],
+    overdue: []
+  });
+
+  useEffect(() => {
+    let isMounted = true;
+    const token = getStoredToken();
+    if (!token) {
+      return;
+    }
+
+    Promise.all([
+      apiFetch<MostBorrowedItem[]>('/api/v1/reports/most-borrowed?limit=10'),
+      apiFetch<OverdueItem[]>('/api/v1/reports/overdue?limit=20')
+    ])
+      .then(([mostBorrowed, overdue]) => {
+        if (!isMounted) {
+          return;
+        }
+        setReportData({
+          mostBorrowed: (mostBorrowed ?? []).map((item) => ({
+            title: item.title,
+            checkout_count: item.checkout_count
+          })),
+          overdue: (overdue ?? []).map((item) => ({
+            loan_id: item.loan_id,
+            user_id: item.user_id,
+            copy_id: item.copy_id,
+            overdue_days: item.overdue_days
+          }))
+        });
+      })
+      .catch(() => {
+        if (isMounted) {
+          setReportData({ mostBorrowed: [], overdue: [] });
+        }
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   return (
     <AppShell

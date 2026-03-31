@@ -1,23 +1,54 @@
+'use client';
+
+import { useEffect, useState } from 'react';
+
 import { AppShell } from '../../components/ui/AppShell';
 import { DataTable } from '../../components/ui/DataTable';
-import { createApiClient } from '../../lib/api';
-import { getCurrentRole } from '../../lib/auth';
+import { apiFetch, getStoredToken, type User } from '../../lib/api';
 
-async function loadUsersRows() {
-  const api = createApiClient({ tenantId: process.env.DEFAULT_TENANT_ID ?? 'default' });
-  const users = await api.listUsers().catch(() => []);
-
-  return users.map((user) => ({
-    id: user.id,
-    full_name: user.full_name,
-    email: user.email,
-    role: user.role
-  }));
+interface UserRow {
+  [key: string]: string | number | null | undefined;
+  id: number;
+  full_name: string;
+  email: string;
+  role: string;
 }
 
-export default async function UsersPage() {
-  const role = getCurrentRole();
-  const rows = await loadUsersRows();
+export default function UsersPage() {
+  const role = 'librarian';
+  const [rows, setRows] = useState<UserRow[]>([]);
+
+  useEffect(() => {
+    let isMounted = true;
+    const token = getStoredToken();
+    if (!token) {
+      return;
+    }
+
+    apiFetch<User[]>('/api/v1/users')
+      .then((users) => {
+        if (!isMounted || !users) {
+          return;
+        }
+        setRows(
+          users.map((user) => ({
+            id: user.id,
+            full_name: user.full_name,
+            email: user.email,
+            role: user.role
+          }))
+        );
+      })
+      .catch(() => {
+        if (isMounted) {
+          setRows([]);
+        }
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   return (
     <AppShell

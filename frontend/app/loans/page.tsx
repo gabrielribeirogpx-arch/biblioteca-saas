@@ -1,24 +1,56 @@
+'use client';
+
+import { useEffect, useState } from 'react';
+
 import { AppShell } from '../../components/ui/AppShell';
 import { DataTable } from '../../components/ui/DataTable';
-import { createApiClient } from '../../lib/api';
-import { getCurrentRole } from '../../lib/auth';
+import { apiFetch, getStoredToken, type Loan } from '../../lib/api';
 
-async function loadLoanRows() {
-  const api = createApiClient({ tenantId: process.env.DEFAULT_TENANT_ID ?? 'default' });
-  const loans = await api.listLoans().catch(() => []);
-
-  return loans.map((loan) => ({
-    id: loan.id,
-    copy_id: loan.copy_id,
-    user_id: loan.user_id,
-    due_date: loan.due_date,
-    status: loan.status
-  }));
+interface LoanRow {
+  [key: string]: string | number | null | undefined;
+  id: number;
+  copy_id: number;
+  user_id: string;
+  due_date: string;
+  status: string;
 }
 
-export default async function LoansPage() {
-  const role = getCurrentRole();
-  const rows = await loadLoanRows();
+export default function LoansPage() {
+  const role = 'librarian';
+  const [rows, setRows] = useState<LoanRow[]>([]);
+
+  useEffect(() => {
+    let isMounted = true;
+    const token = getStoredToken();
+    if (!token) {
+      return;
+    }
+
+    apiFetch<Loan[]>('/api/v1/loans/')
+      .then((loans) => {
+        if (!isMounted || !loans) {
+          return;
+        }
+        setRows(
+          loans.map((loan) => ({
+            id: loan.id,
+            copy_id: loan.copy_id,
+            user_id: loan.user_id,
+            due_date: loan.due_date,
+            status: loan.status
+          }))
+        );
+      })
+      .catch(() => {
+        if (isMounted) {
+          setRows([]);
+        }
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   return (
     <AppShell

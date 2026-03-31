@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 
 import { AppShell } from '../../components/ui/AppShell';
 import { MetricCard } from '../../components/ui/MetricCard';
-import { apiFetch, type Book, type Copy, type Loan, type UserRole } from '../../lib/api';
+import { apiFetch, getStoredToken, type Book, type Copy, type Loan, type UserRole } from '../../lib/api';
 
 type CollectionPayload<T> =
   | T[]
@@ -68,7 +68,13 @@ export default function DashboardPage() {
     async function fetchDashboardData() {
       setState({ books: null, copies: null, loans: null, loading: true, error: null });
 
-      await apiFetch<{ status: string }>('/health');
+      const token = getStoredToken();
+      if (!token) {
+        if (isMounted) {
+          setState({ books: null, copies: null, loans: null, loading: false, error: null });
+        }
+        return;
+      }
 
       const books = await apiFetch<CollectionPayload<Book>>('/api/v1/books/');
 

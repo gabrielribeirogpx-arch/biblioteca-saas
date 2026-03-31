@@ -74,6 +74,13 @@ class ApiError extends Error {
 const DEFAULT_API_URL = 'https://backend-biblioteca-saas-production.up.railway.app';
 const DEFAULT_TENANT_ID = 'default';
 
+export function getStoredToken(): string | null {
+  if (typeof window === 'undefined') {
+    return null;
+  }
+  return window.localStorage.getItem('token');
+}
+
 function getApiBaseUrl(): string {
   return process.env.NEXT_PUBLIC_API_URL ?? DEFAULT_API_URL;
 }
@@ -92,13 +99,13 @@ function buildUrl(baseUrl: string, endpoint: string): string {
   return `${normalizedBase}${normalizedEndpoint}`;
 }
 
-export async function apiFetch<T>(endpoint: string, options?: RequestInit, baseUrl = getApiBaseUrl()): Promise<T> {
+export async function apiFetch<T>(endpoint: string, options?: RequestInit, baseUrl = getApiBaseUrl()): Promise<T | null> {
   const url = buildUrl(baseUrl, endpoint);
-
-  console.log('Calling API:', endpoint);
 
   const headers = new Headers(options?.headers);
   const isTenantScopedEndpoint = endpoint.startsWith('/api/v1/');
+  const providedAuthHeader = headers.get('Authorization');
+  const token = providedAuthHeader ? null : getStoredToken();
 
   if (!headers.has('Accept')) {
     headers.set('Accept', 'application/json');
@@ -111,6 +118,13 @@ export async function apiFetch<T>(endpoint: string, options?: RequestInit, baseU
   const hasBody = options?.body !== undefined && options?.body !== null;
   if (hasBody && !headers.has('Content-Type')) {
     headers.set('Content-Type', 'application/json');
+  }
+
+  if (isTenantScopedEndpoint && !providedAuthHeader) {
+    if (!token) {
+      return null;
+    }
+    headers.set('Authorization', `Bearer ${token}`);
   }
 
   const response = await fetch(url, {
@@ -129,6 +143,9 @@ export async function apiFetch<T>(endpoint: string, options?: RequestInit, baseU
   }
 
   if (!response.ok) {
+    if (response.status === 401 && typeof window !== 'undefined') {
+      window.localStorage.removeItem('token');
+    }
     const body = typeof responseBody === 'string' ? responseBody : JSON.stringify(responseBody);
     throw new ApiError(`API request failed for ${endpoint}`, response.status, body);
   }
@@ -137,27 +154,27 @@ export async function apiFetch<T>(endpoint: string, options?: RequestInit, baseU
 }
 
 export async function getBooks(): Promise<Book[]> {
-  return apiFetch<Book[]>('/api/v1/books/');
+  return (await apiFetch<Book[]>('/api/v1/books/')) ?? [];
 }
 
 export async function getCopies(): Promise<Copy[]> {
-  return apiFetch<Copy[]>('/api/v1/copies/');
+  return (await apiFetch<Copy[]>('/api/v1/copies/')) ?? [];
 }
 
 export async function getLoans(): Promise<Loan[]> {
-  return apiFetch<Loan[]>('/api/v1/loans/');
+  return (await apiFetch<Loan[]>('/api/v1/loans/')) ?? [];
 }
 
 export async function getUsers(): Promise<User[]> {
-  return apiFetch<User[]>('/api/v1/users');
+  return (await apiFetch<User[]>('/api/v1/users')) ?? [];
 }
 
 export async function getReports(): Promise<ReportSummary> {
-  return apiFetch<ReportSummary>('/api/v1/reports');
+  return (await apiFetch<ReportSummary>('/api/v1/reports')) ?? { total_books: 0, total_copies: 0, active_loans: 0 };
 }
 
 export async function getHealth(): Promise<{ status: string }> {
-  return apiFetch<{ status: string }>('/health');
+  return (await apiFetch<{ status: string }>('/health')) ?? { status: 'ok' };
 }
 
 export class ApiClient {
@@ -171,7 +188,7 @@ export class ApiClient {
     this.tenantId = config.tenantId;
   }
 
-  private async request<T>(path: string, init?: RequestInit): Promise<T> {
+  private async request<T>(path: string, init?: RequestInit): Promise<T | null> {
     const headers = new Headers(init?.headers);
 
     if (this.token) {
@@ -188,27 +205,27 @@ export class ApiClient {
     }, this.baseUrl);
   }
 
-  listBooks(): Promise<Book[]> {
+  listBooks(): Promise<Book[] | null> {
     return this.request<Book[]>('/books/');
   }
 
-  listLoans(): Promise<Loan[]> {
+  listLoans(): Promise<Loan[] | null> {
     return this.request<Loan[]>('/loans/');
   }
 
-  listUsers(): Promise<User[]> {
+  listUsers(): Promise<User[] | null> {
     return this.request<User[]>('/users/');
   }
 
-  getSummaryReport(): Promise<ReportSummary> {
+  getSummaryReport(): Promise<ReportSummary | null> {
     return this.request<ReportSummary>('/reports/summary');
   }
 
-  listOverdue(limit = 25): Promise<OverdueItem[]> {
+  listOverdue(limit = 25): Promise<OverdueItem[] | null> {
     return this.request<OverdueItem[]>(`/reports/overdue?limit=${limit}`);
   }
 
-  listMostBorrowed(limit = 10): Promise<MostBorrowedItem[]> {
+  listMostBorrowed(limit = 10): Promise<MostBorrowedItem[] | null> {
     return this.request<MostBorrowedItem[]>(`/reports/most-borrowed?limit=${limit}`);
   }
 }
