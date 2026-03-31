@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import logging
 import re
 import unicodedata
 
 from fastapi import HTTPException, status
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.library import Library
@@ -16,6 +18,7 @@ from app.services.auth_service import AuthService
 
 DEFAULT_TENANT_CODE = "default"
 PASSWORD_SPECIAL_CHARS = "!@#$%^&*()_+-=[]{}|;:,.<>?"
+logger = logging.getLogger(__name__)
 
 
 class TenantService:
@@ -126,7 +129,7 @@ class TenantService:
         if existing_tenant:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Tenant slug already exists")
 
-        async with db.begin():
+        try:
             tenant = Library(name=tenant_name, code=tenant_slug, timezone="UTC")
             db.add(tenant)
             await db.flush()
@@ -135,6 +138,7 @@ class TenantService:
                 await db.execute(select(User).where(User.library_id == tenant.id, User.email == email))
             ).scalar_one_or_none()
             if existing_email:
+                await db.rollback()
                 raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Email already exists for this tenant")
 
             admin_user = User(
@@ -147,9 +151,33 @@ class TenantService:
             )
             db.add(admin_user)
             await db.flush()
+            await db.commit()
 
             token = AuthService.create_access_token(
                 TokenPayload(sub=admin_user.id, role=admin_user.role, library_id=tenant.id)
             )
-
-        return RegisterResponse(success=True, tenant_slug=tenant_slug, token=token)
+            return RegisterResponse(success=True, tenant_slug=tenant_slug, token=token)
+        except HTTPException:
+            raise
+        except IntegrityError as exc:
+            await db.rollback()
+            logger.exception("Failed to register tenant admin due to database integrity error")
+            error_message = str(exc.orig).lower() if exc.orig else str(exc).lower()
+            if "libraries_code_key" in error_message or "uq" in error_message and "slug" in error_message:
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Tenant slug already exists") from exc
+            if "uq_users_library_email" in error_message or "users" in error_message and "email" in error_message:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Email already exists for this tenant",
+                ) from exc
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Unable to create account with provided data",
+            ) from exc
+        except Exception as exc:
+            await db.rollback()
+            logger.exception("Unexpected error while registering tenant admin")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Unable to create account. Please check your data and try again",
+            ) from exc
