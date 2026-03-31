@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import TenantContext, get_db, resolve_tenant
+from app.api.deps import AuthContext, TenantScopedContext, get_db, get_tenant_context, require_librarian, require_user
 from app.models.audit_log import AuditActorType, AuditCategory
 from app.schemas.loans import LoanCreate, LoanOut, LoanRenewRequest
 from app.services.audit_service import AuditService
@@ -13,9 +13,10 @@ router = APIRouter()
 @router.get("/", response_model=list[LoanOut])
 async def list_loans(
     db: AsyncSession = Depends(get_db),
-    tenant: TenantContext = Depends(resolve_tenant),
+    ctx: TenantScopedContext = Depends(get_tenant_context),
+    auth: AuthContext = Depends(require_user),
 ) -> list[LoanOut]:
-    return await LoanService.list_loans(db, tenant.library_id)
+    return await LoanService.list_loans(db, ctx.tenant.library_id)
 
 
 @router.post("/", response_model=LoanOut)
@@ -23,15 +24,16 @@ async def create_loan(
     payload: LoanCreate,
     request: Request,
     db: AsyncSession = Depends(get_db),
-    tenant: TenantContext = Depends(resolve_tenant),
+    ctx: TenantScopedContext = Depends(get_tenant_context),
+    auth: AuthContext = Depends(require_librarian),
 ) -> LoanOut:
-    created = await LoanService.create_loan(db, payload, tenant.library_id, payload.user_id)
+    created = await LoanService.create_loan(db, payload, ctx.tenant.library_id, ctx.user.id)
     await AuditService.log_event(
         db=db,
-        library_id=tenant.library_id,
+        library_id=ctx.tenant.library_id,
         category=AuditCategory.CIRCULATION,
-        actor_type=AuditActorType.SYSTEM,
-        actor_id=None,
+        actor_type=AuditActorType.USER,
+        actor_id=auth.user_id,
         action="loans.create",
         entity_type="loan",
         entity_id=str(created.id),
@@ -49,15 +51,16 @@ async def renew_loan(
     payload: LoanRenewRequest,
     request: Request,
     db: AsyncSession = Depends(get_db),
-    tenant: TenantContext = Depends(resolve_tenant),
+    ctx: TenantScopedContext = Depends(get_tenant_context),
+    auth: AuthContext = Depends(require_librarian),
 ) -> LoanOut:
-    renewed = await LoanService.renew_loan(db, tenant.library_id, loan_id, payload.renewal_days)
+    renewed = await LoanService.renew_loan(db, ctx.tenant.library_id, loan_id, payload.renewal_days)
     await AuditService.log_event(
         db=db,
-        library_id=tenant.library_id,
+        library_id=ctx.tenant.library_id,
         category=AuditCategory.CIRCULATION,
-        actor_type=AuditActorType.SYSTEM,
-        actor_id=None,
+        actor_type=AuditActorType.USER,
+        actor_id=auth.user_id,
         action="loans.renew",
         entity_type="loan",
         entity_id=str(loan_id),
@@ -74,15 +77,16 @@ async def return_loan(
     loan_id: int,
     request: Request,
     db: AsyncSession = Depends(get_db),
-    tenant: TenantContext = Depends(resolve_tenant),
+    ctx: TenantScopedContext = Depends(get_tenant_context),
+    auth: AuthContext = Depends(require_librarian),
 ) -> LoanOut:
-    returned = await LoanService.return_loan(db, tenant.library_id, loan_id)
+    returned = await LoanService.return_loan(db, ctx.tenant.library_id, loan_id)
     await AuditService.log_event(
         db=db,
-        library_id=tenant.library_id,
+        library_id=ctx.tenant.library_id,
         category=AuditCategory.CIRCULATION,
-        actor_type=AuditActorType.SYSTEM,
-        actor_id=None,
+        actor_type=AuditActorType.USER,
+        actor_id=auth.user_id,
         action="loans.return",
         entity_type="loan",
         entity_id=str(loan_id),

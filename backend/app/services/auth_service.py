@@ -72,11 +72,15 @@ class AuthService:
         if not library:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tenant not found")
 
+        login_identifier = (payload.email or payload.username or "").strip().lower()
+        if not login_identifier:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="email is required")
+
         user = (
             await db.execute(
                 select(User).where(
                     User.library_id == library.id,
-                    User.email == payload.username,
+                    User.email == login_identifier,
                 )
             )
         ).scalar_one_or_none()
@@ -90,9 +94,9 @@ class AuthService:
                 actor_id=None,
                 action="auth.login_failed",
                 entity_type="user",
-                entity_id=payload.username,
+                entity_id=login_identifier,
                 summary="Failed login attempt",
-                payload={"username": payload.username},
+                payload={"email": login_identifier},
             )
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
 
