@@ -2,6 +2,8 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 
+import { getStoredTenantId, setStoredTenantId } from '../lib/api';
+
 interface AuthUser {
   email: string;
 }
@@ -11,7 +13,7 @@ interface AuthContextValue {
   token: string | null;
   isAuthenticated: boolean;
   isLoading: boolean;
-  login: (email: string, password: string) => Promise<void>;
+  login: (email: string, password: string, tenantId?: string) => Promise<void>;
   logout: () => void;
 }
 
@@ -36,11 +38,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setIsLoading(false);
   }, []);
 
-  const login = useCallback(async (email: string, password: string) => {
+  const login = useCallback(async (email: string, password: string, tenantId?: string) => {
+    const resolvedTenantId = (tenantId ?? getStoredTenantId()).trim();
+
     const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/v1/auth/login`, {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
+        'X-Tenant-ID': resolvedTenantId
       },
       body: JSON.stringify({ email, password })
     });
@@ -58,6 +63,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (typeof window !== 'undefined') {
       window.localStorage.setItem('token', data.access_token);
       window.localStorage.setItem('user_email', email);
+      setStoredTenantId(resolvedTenantId);
     }
 
     setToken(data.access_token);
@@ -68,6 +74,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (typeof window !== 'undefined') {
       window.localStorage.removeItem('token');
       window.localStorage.removeItem('user_email');
+      window.localStorage.removeItem('tenant_id');
     }
 
     setToken(null);

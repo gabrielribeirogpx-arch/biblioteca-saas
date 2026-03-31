@@ -10,7 +10,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 
 from app.core.config import settings
 from app.db.session import AsyncSessionLocal
-from app.routers import auth, books, copies, loans, reports, search, tenants, users
+from app.routers import auth, books, copies, loans, public_auth, reports, search, tenants, users
 from app.services.tenant_service import TenantService
 
 
@@ -63,6 +63,7 @@ app.add_middleware(
 )
 
 app.include_router(auth.router, prefix="/api/v1/auth", tags=["auth"])
+app.include_router(public_auth.router, prefix="/api/public", tags=["public-auth"])
 app.include_router(books.router, prefix="/api/v1/books", tags=["books"])
 app.include_router(copies.router, prefix="/api/v1/copies", tags=["copies"])
 app.include_router(loans.router, prefix="/api/v1/loans", tags=["loans"])

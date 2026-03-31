@@ -74,6 +74,22 @@ class ApiError extends Error {
 const DEFAULT_API_URL = 'https://backend-biblioteca-saas-production.up.railway.app';
 const DEFAULT_TENANT_ID = 'default';
 
+export function getStoredTenantId(): string {
+  if (typeof window === 'undefined') {
+    return process.env.NEXT_PUBLIC_DEFAULT_TENANT_ID ?? DEFAULT_TENANT_ID;
+  }
+
+  return window.localStorage.getItem('tenant_id') ?? process.env.NEXT_PUBLIC_DEFAULT_TENANT_ID ?? DEFAULT_TENANT_ID;
+}
+
+export function setStoredTenantId(tenantId: string) {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  window.localStorage.setItem('tenant_id', tenantId);
+}
+
 export function getStoredToken(): string | null {
   if (typeof window === 'undefined') {
     return null;
@@ -109,7 +125,7 @@ export async function apiFetch<T = unknown>(url: string, options: RequestInit = 
   }
 
   if (url.startsWith('/api/v1/') && !headers.has('X-Tenant-ID')) {
-    headers.set('X-Tenant-ID', process.env.NEXT_PUBLIC_DEFAULT_TENANT_ID ?? DEFAULT_TENANT_ID);
+    headers.set('X-Tenant-ID', getStoredTenantId());
   }
 
   if (token && !headers.has('Authorization')) {
@@ -126,6 +142,7 @@ export async function apiFetch<T = unknown>(url: string, options: RequestInit = 
     if (typeof window !== 'undefined') {
       localStorage.removeItem('token');
       localStorage.removeItem('user_email');
+      localStorage.removeItem('tenant_id');
       window.location.href = '/login';
     }
     return null;
