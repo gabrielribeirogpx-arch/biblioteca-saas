@@ -41,7 +41,12 @@ class Settings(BaseSettings):
                     if isinstance(parsed_value, list):
                         return [str(origin).strip() for origin in parsed_value if str(origin).strip()]
 
-            return [origin.strip().strip("\"'") for origin in trimmed.split(",") if origin.strip()]
+            normalized = trimmed.strip("[]")
+            return [
+                origin.strip().strip("\"'").strip()
+                for origin in normalized.split(",")
+                if origin.strip().strip("\"'").strip()
+            ]
         return value
 
 

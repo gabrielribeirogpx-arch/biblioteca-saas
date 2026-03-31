@@ -92,12 +92,20 @@ export async function apiFetch<T>(endpoint: string, options?: RequestInit, baseU
 
   console.log('Calling API:', endpoint);
 
+  const headers = new Headers(options?.headers);
+
+  if (!headers.has('Accept')) {
+    headers.set('Accept', 'application/json');
+  }
+
+  const hasBody = options?.body !== undefined && options?.body !== null;
+  if (hasBody && !headers.has('Content-Type')) {
+    headers.set('Content-Type', 'application/json');
+  }
+
   const response = await fetch(url, {
     ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      ...(options?.headers ?? {})
-    },
+    headers,
     cache: 'no-store'
   });
 
