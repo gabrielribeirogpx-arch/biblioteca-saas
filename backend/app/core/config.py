@@ -13,7 +13,6 @@ class Settings(BaseSettings):
     JWT_ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
     CORS_ALLOW_ORIGINS: list[str] = [
         "https://front-biblioteca-saas.vercel.app",
-        "http://localhost:3000",
     ]
     CORS_ALLOW_ORIGIN_REGEX: str = r"^https://.*\.vercel\.app$"
 

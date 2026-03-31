@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import AuthContext, TenantContext, get_db, require_librarian, resolve_tenant
+from app.api.deps import AuthContext, TenantScopedContext, get_db, get_tenant_context, require_librarian, require_user
 from app.models.audit_log import AuditActorType, AuditCategory
 from app.schemas.copies import CopyCreate, CopyOut
 from app.services.audit_service import AuditService
@@ -13,10 +13,10 @@ router = APIRouter()
 @router.get("/", response_model=list[CopyOut])
 async def list_copies(
     db: AsyncSession = Depends(get_db),
-    tenant: TenantContext = Depends(resolve_tenant),
+    ctx: TenantScopedContext = Depends(get_tenant_context),
+    auth: AuthContext = Depends(require_user),
 ) -> list[CopyOut]:
-    print("AUTH BYPASSED FOR PUBLIC ROUTE")
-    return CopyService.list_copies(db, tenant.tenant_id)
+    return await CopyService.list_copies(db, ctx.tenant.library_id)
 
 
 @router.post("/", response_model=CopyOut)
@@ -24,13 +24,13 @@ async def create_copy(
     payload: CopyCreate,
     request: Request,
     db: AsyncSession = Depends(get_db),
-    tenant: TenantContext = Depends(resolve_tenant),
+    ctx: TenantScopedContext = Depends(get_tenant_context),
     auth: AuthContext = Depends(require_librarian),
 ) -> CopyOut:
-    created = CopyService.create_copy(db, payload, tenant.tenant_id)
+    created = await CopyService.create_copy(db, payload, ctx.tenant.library_id)
     await AuditService.log_event(
         db=db,
-        library_id=tenant.library_id,
+        library_id=ctx.tenant.library_id,
         category=AuditCategory.CATALOG,
         actor_type=AuditActorType.USER,
         actor_id=auth.user_id,

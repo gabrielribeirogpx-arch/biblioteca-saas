@@ -34,6 +34,12 @@ class AuthContext:
     library_id: int
 
 
+@dataclass(slots=True)
+class TenantScopedContext:
+    user: "User"
+    tenant: TenantContext
+
+
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
     if AsyncSessionLocal is None:
         raise HTTPException(
@@ -68,8 +74,15 @@ async def resolve_tenant(
     request: Request,
     db: AsyncSession = Depends(get_db),
     x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
+    tenant_query: str | None = None,
 ) -> TenantContext:
-    tenant_key = (x_tenant_id or _extract_subdomain(request.headers.get("host")) or DEFAULT_TENANT_CODE).strip()
+    tenant_query = tenant_query or request.query_params.get("tenant")
+    tenant_key = (
+        x_tenant_id
+        or tenant_query
+        or _extract_subdomain(request.headers.get("host"))
+        or DEFAULT_TENANT_CODE
+    ).strip()
 
     query = select(Library).where(Library.code == tenant_key)
     if tenant_key.isdigit():
@@ -98,15 +111,12 @@ _bearer = HTTPBearer(auto_error=False)
 
 async def get_auth_context(
     request: Request,
-    tenant: TenantContext = Depends(resolve_tenant),
     credentials: HTTPAuthorizationCredentials | None = Depends(_bearer),
 ) -> AuthContext:
     if not credentials:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing bearer token")
 
     payload: TokenPayload = AuthService.decode_access_token(credentials.credentials)
-    if payload.library_id != tenant.library_id:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token tenant mismatch")
 
     auth_context = AuthContext(
         user_id=payload.sub,
@@ -115,6 +125,53 @@ async def get_auth_context(
     )
     request.state.auth_context = auth_context
     return auth_context
+
+
+async def get_current_user(
+    db: AsyncSession = Depends(get_db),
+    auth: AuthContext = Depends(get_auth_context),
+):
+    from app.models.user import User
+
+    user = (await db.execute(select(User).where(User.id == auth.user_id, User.library_id == auth.library_id))).scalar_one_or_none()
+    if not user or not user.is_active:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid authentication token")
+    return user
+
+
+async def get_current_tenant(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
+    user=Depends(get_current_user),
+) -> TenantContext:
+    tenant_query = request.query_params.get("tenant")
+    tenant_key = (x_tenant_id or tenant_query or str(user.library_id)).strip()
+
+    query = select(Library).where(Library.code == tenant_key)
+    if tenant_key.isdigit():
+        query = select(Library).where((Library.code == tenant_key) | (Library.id == int(tenant_key)))
+
+    library = (await db.execute(query)).scalar_one_or_none()
+    if not library:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tenant not found")
+
+    tenant_context = TenantContext(
+        tenant_id=library.code,
+        library_id=library.id,
+        library_code=library.code,
+    )
+    request.state.tenant_context = tenant_context
+    return tenant_context
+
+
+async def get_tenant_context(
+    user=Depends(get_current_user),
+    tenant: TenantContext = Depends(get_current_tenant),
+) -> TenantScopedContext:
+    if tenant.library_id != user.library_id:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token tenant mismatch")
+    return TenantScopedContext(user=user, tenant=tenant)
 
 
 def role_guard(*allowed_roles: UserRole) -> Callable[..., AuthContext]:
