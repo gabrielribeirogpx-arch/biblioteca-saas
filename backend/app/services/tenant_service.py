@@ -147,6 +147,7 @@ class TenantService:
                 password_hash=AuthService.hash_password(password),
                 is_active=True,
             )
+            admin_user.library_id = tenant.id
             db.add(admin_user)
             await db.commit()
 

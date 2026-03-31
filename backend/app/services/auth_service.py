@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.models.audit_log import AuditActorType, AuditCategory
+from app.models.library import Library
 from app.models.user import User
 from app.schemas.auth import LoginRequest, TokenPayload, TokenResponse
 from app.services.audit_service import AuditService
@@ -19,12 +20,7 @@ from app.services.audit_service import AuditService
 class AuthService:
     @staticmethod
     def verify_password(password: str, hashed: str) -> bool:
-        if not hashed:
-            return False
-        try:
-            return bcrypt.checkpw(password.encode(), hashed.encode())
-        except ValueError:
-            return False
+        return bcrypt.checkpw(password.encode(), hashed.encode())
 
     @staticmethod
     def hash_password(password: str) -> str:
@@ -66,7 +62,7 @@ class AuthService:
             ) from exc
 
     @staticmethod
-    async def login(db: AsyncSession, payload: LoginRequest, library_id: int) -> TokenResponse:
+    async def login(db: AsyncSession, payload: LoginRequest, tenant: Library) -> TokenResponse:
         login_identifier = (payload.email or payload.username or "").strip().lower()
         if not login_identifier:
             raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="email is required")
@@ -74,16 +70,21 @@ class AuthService:
         user = (
             await db.execute(
                 select(User).where(
-                    User.library_id == library_id,
+                    User.library_id == tenant.id,
                     User.email == login_identifier,
                 )
             )
         ).scalar_one_or_none()
 
-        if not user or not user.is_active or not AuthService.verify_password(payload.password, user.password_hash):
+        print("LOGIN DEBUG:")
+        print("email:", login_identifier)
+        print("tenant:", getattr(tenant, "slug", tenant.code) if tenant else None)
+        print("user encontrado:", user is not None)
+
+        if not user or not user.is_active:
             await AuditService.log_event(
                 db=db,
-                library_id=library_id,
+                library_id=tenant.id,
                 category=AuditCategory.AUTH,
                 actor_type=AuditActorType.SYSTEM,
                 actor_id=None,
@@ -93,14 +94,30 @@ class AuthService:
                 summary="Failed login attempt",
                 payload={"email": login_identifier},
             )
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Credenciais inválidas")
 
-        token_payload = TokenPayload(sub=user.id, role=user.role, library_id=library_id)
+        hashed_password = getattr(user, "hashed_password", user.password_hash)
+        if not AuthService.verify_password(payload.password, hashed_password):
+            await AuditService.log_event(
+                db=db,
+                library_id=tenant.id,
+                category=AuditCategory.AUTH,
+                actor_type=AuditActorType.SYSTEM,
+                actor_id=None,
+                action="auth.login_failed",
+                entity_type="user",
+                entity_id=login_identifier,
+                summary="Failed login attempt",
+                payload={"email": login_identifier},
+            )
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Credenciais inválidas")
+
+        token_payload = TokenPayload(sub=user.id, role=user.role, library_id=tenant.id)
         access_token = AuthService.create_access_token(token_payload)
 
         await AuditService.log_event(
             db=db,
-            library_id=library_id,
+            library_id=tenant.id,
             category=AuditCategory.AUTH,
             actor_type=AuditActorType.USER,
             actor_id=user.id,
