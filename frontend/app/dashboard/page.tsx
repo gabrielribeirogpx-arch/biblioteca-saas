@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 
+import { ProtectedRoute } from '../../components/auth/ProtectedRoute';
 import { AppShell } from '../../components/ui/AppShell';
 import { MetricCard } from '../../components/ui/MetricCard';
 import { apiFetch, getStoredToken, type Book, type Copy, type Loan, type UserRole } from '../../lib/api';
@@ -104,7 +105,8 @@ export default function DashboardPage() {
   const activeLoans = getCollectionTotal<Loan>(state.loans);
 
   return (
-    <AppShell
+    <ProtectedRoute>
+      <AppShell
       role={role}
       title="Dashboard"
       subtitle="Monitor catalog health, circulation throughput, and tenant readiness."
@@ -122,6 +124,7 @@ export default function DashboardPage() {
         <MetricCard helper="Inventory across branches and collections" label="Total Copies" value={totalCopies} />
         <MetricCard helper="Loans currently in active state" label="Active Loans" value={activeLoans} />
       </div>
-    </AppShell>
+      </AppShell>
+    </ProtectedRoute>
   );
 }

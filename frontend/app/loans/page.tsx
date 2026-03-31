@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 
+import { ProtectedRoute } from '../../components/auth/ProtectedRoute';
 import { AppShell } from '../../components/ui/AppShell';
 import { DataTable } from '../../components/ui/DataTable';
 import { apiFetch, getStoredToken, type Loan } from '../../lib/api';
@@ -53,7 +54,8 @@ export default function LoansPage() {
   }, []);
 
   return (
-    <AppShell
+    <ProtectedRoute>
+      <AppShell
       role={role}
       title="Loans"
       subtitle="Process checkouts, monitor due dates, and return circulation assets quickly."
@@ -71,6 +73,7 @@ export default function LoansPage() {
         searchableFields={['id', 'copy_id', 'user_id', 'status']}
         title="Circulation Queue"
       />
-    </AppShell>
+      </AppShell>
+    </ProtectedRoute>
   );
 }
