@@ -11,6 +11,35 @@ interface RegisterResponse {
   token?: string | null;
 }
 
+interface ApiErrorDetail {
+  detail?: string | Array<{ loc?: Array<string | number>; msg?: string }>;
+}
+
+function extractApiErrorMessage(errorBody: ApiErrorDetail | null): string {
+  if (!errorBody?.detail) {
+    return 'Falha no cadastro';
+  }
+
+  if (typeof errorBody.detail === 'string') {
+    return errorBody.detail;
+  }
+
+  if (Array.isArray(errorBody.detail) && errorBody.detail.length > 0) {
+    return errorBody.detail
+      .map((item) => {
+        const field = item.loc?.at(-1);
+        if (field && item.msg) {
+          return `${String(field)}: ${item.msg}`;
+        }
+
+        return item.msg ?? 'Dados inválidos';
+      })
+      .join('; ');
+  }
+
+  return 'Falha no cadastro';
+}
+
 function slugifyName(value: string): string {
   return value
     .normalize('NFD')
@@ -95,8 +124,8 @@ export default function RegisterPage() {
       });
 
       if (!response.ok) {
-        const errorBody = await response.json().catch(() => null);
-        throw new Error(errorBody?.detail ?? 'Falha no cadastro');
+        const errorBody = (await response.json().catch(() => null)) as ApiErrorDetail | null;
+        throw new Error(extractApiErrorMessage(errorBody));
       }
 
       const data = (await response.json()) as RegisterResponse;

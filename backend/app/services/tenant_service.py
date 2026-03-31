@@ -127,19 +127,17 @@ class TenantService:
 
         existing_tenant = (await db.execute(select(Library).where(Library.code == tenant_slug))).scalar_one_or_none()
         if existing_tenant:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Tenant slug already exists")
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Slug already exists")
 
         try:
             tenant = Library(name=tenant_name, code=tenant_slug, timezone="UTC")
             db.add(tenant)
             await db.flush()
 
-            existing_email = (
-                await db.execute(select(User).where(User.library_id == tenant.id, User.email == email))
-            ).scalar_one_or_none()
+            existing_email = (await db.execute(select(User).where(User.email == email))).scalar_one_or_none()
             if existing_email:
                 await db.rollback()
-                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Email already exists for this tenant")
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Email already registered")
 
             admin_user = User(
                 library_id=tenant.id,
@@ -164,20 +162,20 @@ class TenantService:
             logger.exception("Failed to register tenant admin due to database integrity error")
             error_message = str(exc.orig).lower() if exc.orig else str(exc).lower()
             if "libraries_code_key" in error_message or "uq" in error_message and "slug" in error_message:
-                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Tenant slug already exists") from exc
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Slug already exists") from exc
             if "uq_users_library_email" in error_message or "users" in error_message and "email" in error_message:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Email already exists for this tenant",
+                    detail="Email already registered",
                 ) from exc
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Unable to create account with provided data",
+                detail=str(exc.orig) if exc.orig else str(exc),
             ) from exc
         except Exception as exc:
             await db.rollback()
             logger.exception("Unexpected error while registering tenant admin")
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Unable to create account. Please check your data and try again",
+                detail=str(exc),
             ) from exc
