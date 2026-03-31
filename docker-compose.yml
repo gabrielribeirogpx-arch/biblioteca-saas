@@ -102,9 +102,9 @@ services:
       MINIO_BUCKET: ${MINIO_BUCKET:-library-assets}
       MINIO_SECURE: "false"
     command: >
-      bash -c "alembic upgrade head || true && uvicorn app.main:app --host 0.0.0.0 --port 8000"
+      uvicorn app.main:app --host 0.0.0.0 --port 8080
     ports:
-      - "8000:8000"
+      - "8000:8080"
     depends_on:
       postgres:
         condition: service_healthy
@@ -115,7 +115,7 @@ services:
       minio-init:
         condition: service_completed_successfully
     healthcheck:
-      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/docs')\""]
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8080/health')\""]
       interval: 15s
       timeout: 5s
       retries: 10
