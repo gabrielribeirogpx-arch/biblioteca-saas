@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 
-import { apiFetch } from '../lib/api';
+import { apiFetch, getStoredToken } from '../lib/api';
 
 interface UseApiState<T> {
   data: T | null;
@@ -22,6 +22,14 @@ export function useApi<T>(endpoint: string) {
 
     async function fetchData() {
       setState({ data: null, loading: true, error: null });
+
+      const token = getStoredToken();
+      if (!token && endpoint.startsWith('/api/v1/')) {
+        if (isMounted) {
+          setState({ data: null, loading: false, error: null });
+        }
+        return;
+      }
 
       try {
         const data = await apiFetch<T>(endpoint);

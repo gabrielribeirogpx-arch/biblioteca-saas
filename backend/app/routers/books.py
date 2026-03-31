@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import AuthContext, TenantContext, get_db, require_librarian, require_user, resolve_tenant
+from app.api.deps import AuthContext, TenantScopedContext, get_db, get_tenant_context, require_librarian, require_user
 from app.models.audit_log import AuditActorType, AuditCategory
 from app.schemas.books import (
     AACR2ValidateRequest,
@@ -23,10 +23,10 @@ router = APIRouter()
 @router.get("/", response_model=list[BookOut])
 async def list_books(
     db: AsyncSession = Depends(get_db),
-    tenant: TenantContext = Depends(resolve_tenant),
+    ctx: TenantScopedContext = Depends(get_tenant_context),
+    auth: AuthContext = Depends(require_user),
 ) -> list[BookOut]:
-    print("AUTH BYPASSED FOR PUBLIC ROUTE")
-    return await BookService.list_books(db, tenant.library_id)
+    return await BookService.list_books(db, ctx.tenant.library_id)
 
 
 @router.post("/", response_model=BookOut)
@@ -34,13 +34,13 @@ async def create_book(
     payload: BookCreate,
     request: Request,
     db: AsyncSession = Depends(get_db),
-    tenant: TenantContext = Depends(resolve_tenant),
+    ctx: TenantScopedContext = Depends(get_tenant_context),
     auth: AuthContext = Depends(require_librarian),
 ) -> BookOut:
-    created = await BookService.create_book(db, payload, tenant.library_id)
+    created = await BookService.create_book(db, payload, ctx.tenant.library_id)
     await AuditService.log_event(
         db=db,
-        library_id=tenant.library_id,
+        library_id=ctx.tenant.library_id,
         category=AuditCategory.CATALOG,
         actor_type=AuditActorType.USER,
         actor_id=auth.user_id,
@@ -60,18 +60,18 @@ async def import_marc21(
     payload: MARC21ImportRequest,
     request: Request,
     db: AsyncSession = Depends(get_db),
-    tenant: TenantContext = Depends(resolve_tenant),
+    ctx: TenantScopedContext = Depends(get_tenant_context),
     auth: AuthContext = Depends(require_librarian),
 ) -> MARC21ImportResponse:
     book, normalized_record, iso2709_base64 = await BookService.import_marc21_record(
         db=db,
-        library_id=tenant.library_id,
+        library_id=ctx.tenant.library_id,
         record=payload.record,
         category=payload.category,
     )
     await AuditService.log_event(
         db=db,
-        library_id=tenant.library_id,
+        library_id=ctx.tenant.library_id,
         category=AuditCategory.CATALOG,
         actor_type=AuditActorType.USER,
         actor_id=auth.user_id,
@@ -95,18 +95,18 @@ async def export_marc21(
     book_id: int,
     request: Request,
     db: AsyncSession = Depends(get_db),
-    tenant: TenantContext = Depends(resolve_tenant),
+    ctx: TenantScopedContext = Depends(get_tenant_context),
     auth: AuthContext = Depends(require_user),
 ) -> MARC21ExportResponse:
     book, normalized_record, iso2709_base64 = await BookService.export_marc21_record(
         db=db,
-        library_id=tenant.library_id,
+        library_id=ctx.tenant.library_id,
         book_id=book_id,
     )
 
     await AuditService.log_event(
         db=db,
-        library_id=tenant.library_id,
+        library_id=ctx.tenant.library_id,
         category=AuditCategory.CATALOG,
         actor_type=AuditActorType.USER,
         actor_id=auth.user_id,
@@ -131,19 +131,19 @@ async def validate_aacr2(
     payload: AACR2ValidateRequest,
     request: Request,
     db: AsyncSession = Depends(get_db),
-    tenant: TenantContext = Depends(resolve_tenant),
+    ctx: TenantScopedContext = Depends(get_tenant_context),
     auth: AuthContext = Depends(require_librarian),
 ) -> AACR2ValidateResponse:
     valid, errors, normalized_record = await BookService.validate_aacr2_record(
         db=db,
-        library_id=tenant.library_id,
+        library_id=ctx.tenant.library_id,
         record=payload.record,
         book_id=payload.book_id,
     )
 
     await AuditService.log_event(
         db=db,
-        library_id=tenant.library_id,
+        library_id=ctx.tenant.library_id,
         category=AuditCategory.CATALOG,
         actor_type=AuditActorType.USER,
         actor_id=auth.user_id,
@@ -168,19 +168,19 @@ async def lookup_z3950(
     payload: Z3950LookupRequest,
     request: Request,
     db: AsyncSession = Depends(get_db),
-    tenant: TenantContext = Depends(resolve_tenant),
+    ctx: TenantScopedContext = Depends(get_tenant_context),
     auth: AuthContext = Depends(require_librarian),
 ) -> Z3950LookupResponse:
     imported_books = await BookService.lookup_and_ingest_z3950(
         db=db,
-        library_id=tenant.library_id,
+        library_id=ctx.tenant.library_id,
         query=payload.query,
         limit=payload.limit,
     )
 
     await AuditService.log_event(
         db=db,
-        library_id=tenant.library_id,
+        library_id=ctx.tenant.library_id,
         category=AuditCategory.CATALOG,
         actor_type=AuditActorType.USER,
         actor_id=auth.user_id,

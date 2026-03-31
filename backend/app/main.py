@@ -1,8 +1,12 @@
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+import json
+import logging
+from uuid import uuid4
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware
 
 from app.core.config import settings
 from app.db.session import AsyncSessionLocal
@@ -10,15 +14,44 @@ from app.routers import auth, books, copies, loans, reports, search, tenants, us
 from app.services.tenant_service import TenantService
 
 
+logger = logging.getLogger("app.request")
+
+
 @asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     if AsyncSessionLocal is not None:
         async with AsyncSessionLocal() as db:
-            await TenantService.seed_default_tenant(db)
+            default_tenant = await TenantService.seed_default_tenant(db)
+            await TenantService.seed_default_admin(db, default_tenant)
     yield
 
 
 app = FastAPI(lifespan=lifespan)
+
+
+class RequestContextLoggingMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        request_id = request.headers.get("x-request-id") or str(uuid4())
+        request.state.request_id = request_id
+        response = await call_next(request)
+        tenant_context = getattr(request.state, "tenant_context", None)
+        auth_context = getattr(request.state, "auth_context", None)
+        logger.info(
+            json.dumps(
+                {
+                    "request_id": request_id,
+                    "tenant_id": getattr(tenant_context, "library_id", None),
+                    "user_id": getattr(auth_context, "user_id", None),
+                    "endpoint": f"{request.method} {request.url.path}",
+                    "status_code": response.status_code,
+                }
+            )
+        )
+        response.headers["x-request-id"] = request_id
+        return response
+
+
+app.add_middleware(RequestContextLoggingMiddleware)
 
 app.add_middleware(
     CORSMiddleware,
@@ -46,5 +79,4 @@ def root() -> dict[str, str]:
 
 @app.get("/health", tags=["health"])
 def health() -> dict[str, str]:
-    print("AUTH BYPASSED FOR PUBLIC ROUTE")
     return {"status": "ok"}

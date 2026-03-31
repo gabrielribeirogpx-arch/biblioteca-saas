@@ -4,7 +4,8 @@ from app.models.user import UserRole
 
 
 class LoginRequest(BaseModel):
-    username: str
+    email: str | None = None
+    username: str | None = None
     password: str
 
 
