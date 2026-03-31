@@ -18,6 +18,7 @@ interface AuthContextValue {
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
+const FALLBACK_TENANT_ID = 'biblioteca-municipal';
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [token, setToken] = useState<string | null>(null);
@@ -39,15 +40,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const login = useCallback(async (email: string, password: string, tenantId?: string) => {
-    const resolvedTenantId = (tenantId ?? getStoredTenantId()).trim();
+    const resolvedTenantId = (tenantId ?? getStoredTenantId() ?? FALLBACK_TENANT_ID).trim() || FALLBACK_TENANT_ID;
+    const sanitizedEmail = email.trim();
+    const sanitizedPassword = password;
+    const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL ?? '';
 
-    const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/v1/auth/login`, {
+    const response = await fetch(`${apiBaseUrl}/api/v1/auth/login?tenant=${encodeURIComponent(resolvedTenantId)}`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'X-Tenant-ID': resolvedTenantId
       },
-      body: JSON.stringify({ email, password })
+      body: JSON.stringify({ email: sanitizedEmail, password: sanitizedPassword })
     });
 
     if (!response.ok) {
@@ -62,12 +66,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     if (typeof window !== 'undefined') {
       window.localStorage.setItem('token', data.access_token);
-      window.localStorage.setItem('user_email', email);
+      window.localStorage.setItem('user_email', sanitizedEmail);
       setStoredTenantId(resolvedTenantId);
     }
 
     setToken(data.access_token);
-    setUser({ email });
+    setUser({ email: sanitizedEmail });
   }, []);
 
   const logout = useCallback(() => {
