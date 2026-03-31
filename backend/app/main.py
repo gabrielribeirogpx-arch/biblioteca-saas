@@ -4,11 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.routers import auth, books, copies, loans, reports, search, users
 
 
-app = FastAPI(
-    title="Library SaaS API",
-    description="Multi-tenant enterprise-grade library management API",
-    version="1.0.0",
-)
+app = FastAPI()
 
 app.add_middleware(
     CORSMiddleware,
@@ -21,6 +17,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+print("🚀 FastAPI started")
 print("CORS middleware loaded")
 
 app.include_router(auth.router, prefix="/api/v1/auth", tags=["auth"])
@@ -34,4 +31,9 @@ app.include_router(reports.router, prefix="/api/v1/reports", tags=["reports"])
 
 @app.get("/", tags=["health"])
 def root() -> dict[str, str]:
+    return {"status": "ok"}
+
+
+@app.get("/health", tags=["health"])
+def health() -> dict[str, str]:
     return {"status": "ok"}

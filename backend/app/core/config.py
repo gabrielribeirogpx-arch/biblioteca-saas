@@ -13,9 +13,11 @@ class Settings(BaseSettings):
     @field_validator("DATABASE_URL")
     @classmethod
     def validate_async_database_url(cls, value: str) -> str:
-        if not value.startswith("postgresql+asyncpg://"):
-            raise ValueError("DATABASE_URL must use async DSN format: postgresql+asyncpg://...")
-        return value
+        if value.startswith("postgresql+asyncpg://"):
+            return value
+        if value.startswith("postgresql://"):
+            return value.replace("postgresql://", "postgresql+asyncpg://", 1)
+        raise ValueError("DATABASE_URL must use postgresql:// or postgresql+asyncpg:// format")
 
 
 settings = Settings()
