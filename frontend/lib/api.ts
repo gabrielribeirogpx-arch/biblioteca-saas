@@ -72,9 +72,14 @@ class ApiError extends Error {
 }
 
 const DEFAULT_API_URL = 'https://backend-biblioteca-saas-production.up.railway.app';
+const DEFAULT_TENANT_ID = 'default';
 
 function getApiBaseUrl(): string {
   return process.env.NEXT_PUBLIC_API_URL ?? DEFAULT_API_URL;
+}
+
+function getDefaultTenantId(): string {
+  return process.env.NEXT_PUBLIC_DEFAULT_TENANT_ID ?? DEFAULT_TENANT_ID;
 }
 
 function buildUrl(baseUrl: string, endpoint: string): string {
@@ -93,9 +98,14 @@ export async function apiFetch<T>(endpoint: string, options?: RequestInit, baseU
   console.log('Calling API:', endpoint);
 
   const headers = new Headers(options?.headers);
+  const isTenantScopedEndpoint = endpoint.startsWith('/api/v1/');
 
   if (!headers.has('Accept')) {
     headers.set('Accept', 'application/json');
+  }
+
+  if (isTenantScopedEndpoint && !headers.has('X-Tenant-ID')) {
+    headers.set('X-Tenant-ID', getDefaultTenantId());
   }
 
   const hasBody = options?.body !== undefined && options?.body !== null;
