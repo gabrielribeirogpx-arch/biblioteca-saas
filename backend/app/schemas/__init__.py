@@ -4,6 +4,7 @@ from app.schemas.copies import CopyCreate, CopyOut
 from app.schemas.loans import LoanCreate, LoanOut
 from app.schemas.reports import ReportSummary
 from app.schemas.search import SearchQuery, SearchResult
+from app.schemas.tenants import TenantCreate, TenantOut
 from app.schemas.users import UserCreate, UserOut
 
 __all__ = [
@@ -17,6 +18,8 @@ __all__ = [
     "ReportSummary",
     "SearchQuery",
     "SearchResult",
+    "TenantCreate",
+    "TenantOut",
     "TokenResponse",
     "UserCreate",
     "UserOut",

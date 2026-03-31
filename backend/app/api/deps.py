@@ -17,6 +17,9 @@ from app.services.audit_service import AuditService
 from app.services.auth_service import AuthService
 
 
+DEFAULT_TENANT_CODE = "default"
+
+
 @dataclass(slots=True)
 class TenantContext:
     tenant_id: str
@@ -66,20 +69,20 @@ async def resolve_tenant(
     db: AsyncSession = Depends(get_db),
     x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
 ) -> TenantContext:
-    tenant_key = x_tenant_id or _extract_subdomain(request.headers.get("host"))
-    if not tenant_key:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Missing tenant identifier. Provide X-Tenant-ID header or tenant subdomain.",
-        )
+    tenant_key = (x_tenant_id or _extract_subdomain(request.headers.get("host")) or DEFAULT_TENANT_CODE).strip()
 
     query = select(Library).where(Library.code == tenant_key)
     if tenant_key.isdigit():
         query = select(Library).where((Library.code == tenant_key) | (Library.id == int(tenant_key)))
 
     library = (await db.execute(query)).scalar_one_or_none()
+    if not library and tenant_key != DEFAULT_TENANT_CODE:
+        library = (
+            await db.execute(select(Library).where(Library.code == DEFAULT_TENANT_CODE))
+        ).scalar_one_or_none()
+
     if not library:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tenant not found")
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Default tenant is unavailable")
 
     tenant_context = TenantContext(
         tenant_id=library.code,
