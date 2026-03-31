@@ -4,7 +4,7 @@ from datetime import datetime, timedelta, timezone
 
 import jwt
 from fastapi import HTTPException, status
-from passlib.context import CryptContext
+import bcrypt
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -16,17 +16,20 @@ from app.schemas.auth import LoginRequest, TokenPayload, TokenResponse
 from app.services.audit_service import AuditService
 
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-
 
 class AuthService:
     @staticmethod
-    def verify_password(plain_password: str, password_hash: str) -> bool:
-        return pwd_context.verify(plain_password, password_hash)
+    def verify_password(password: str, hashed: str) -> bool:
+        if not hashed:
+            return False
+        try:
+            return bcrypt.checkpw(password.encode(), hashed.encode())
+        except ValueError:
+            return False
 
     @staticmethod
     def hash_password(password: str) -> str:
-        return pwd_context.hash(password)
+        return bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
 
     @staticmethod
     def create_access_token(payload: TokenPayload) -> str:
