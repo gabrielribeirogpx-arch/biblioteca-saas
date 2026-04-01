@@ -2,15 +2,21 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 import json
 import logging
+from pathlib import Path
 from uuid import uuid4
 
+from alembic import command
+from alembic.config import Config
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from sqlalchemy import text
+from sqlalchemy.exc import SQLAlchemyError
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from app.core.config import settings
 from app.db.session import AsyncSessionLocal
+from app.models.organization import Organization
 from app.routers import authorities, auth, books, catalog, copies, fines, loans, public_auth, reports, reservations, search, tenants, users
 from app.services.tenant_service import TenantService
 
@@ -18,12 +24,48 @@ from app.services.tenant_service import TenantService
 logger = logging.getLogger("app.request")
 
 
+def _run_db_migrations() -> None:
+    alembic_ini_path = Path(__file__).resolve().parents[1] / "alembic.ini"
+    alembic_cfg = Config(str(alembic_ini_path))
+    alembic_cfg.set_main_option("sqlalchemy.url", settings.DATABASE_URL)
+
+    versions_dir = Path(__file__).resolve().parents[1] / "alembic" / "versions"
+    has_organization_migration = any("organization" in file.name for file in versions_dir.glob("*.py"))
+    if not has_organization_migration:
+        command.revision(
+            alembic_cfg,
+            message="add organizations table",
+            autogenerate=True,
+        )
+        logger.info("Generated missing organizations migration automatically")
+
+    command.upgrade(alembic_cfg, "head")
+    logger.info("Database migrations applied up to head")
+
+
 @asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
+    try:
+        _run_db_migrations()
+    except Exception:
+        logger.exception("Failed to run database migrations during startup; continuing without crashing")
+
     if AsyncSessionLocal is not None:
         async with AsyncSessionLocal() as db:
-            default_tenant = await TenantService.seed_default_tenant(db)
-            await TenantService.seed_default_admin(db, default_tenant)
+            try:
+                await db.execute(text("SELECT 1 FROM organizations LIMIT 1"))
+            except SQLAlchemyError:
+                logger.warning("Skipping default seeding because organizations table is not available")
+                await db.rollback()
+            else:
+                try:
+                    # Guard query: skip startup seeding gracefully if Organization access fails.
+                    await db.execute(text(f"SELECT 1 FROM {Organization.__tablename__} LIMIT 1"))
+                    default_tenant = await TenantService.seed_default_tenant(db)
+                    await TenantService.seed_default_admin(db, default_tenant)
+                except SQLAlchemyError:
+                    logger.warning("Skipping default seeding because Organization query failed")
+                    await db.rollback()
     yield
 
 
