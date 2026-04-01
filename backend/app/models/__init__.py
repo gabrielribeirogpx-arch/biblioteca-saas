@@ -1,5 +1,6 @@
 from app.models.agreement import Agreement, AgreementCategory, AgreementStatus
 from app.models.audit_log import AuditActorType, AuditCategory, AuditLog
+from app.models.authority import Author, Subject
 from app.models.book import Book, BookCategory
 from app.models.copy import Copy, CopyStatus
 from app.models.fine import Fine, FineStatus
@@ -15,6 +16,7 @@ __all__ = [
     "AuditActorType",
     "AuditCategory",
     "AuditLog",
+    "Author",
     "Book",
     "BookCategory",
     "Copy",
@@ -26,6 +28,7 @@ __all__ = [
     "LoanStatus",
     "Reservation",
     "ReservationStatus",
+    "Subject",
     "User",
     "UserRole",
 ]

@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.book import Book, BookCategory
 from app.schemas.books import AdvancedCatalogRequest, BookCreate, BookLookupResponse, BookOut
+from app.services.authorities import AuthorityService
 from app.services.standards import AACR2Validator, ISO2709Codec, MARC21Service, Z3950Gateway
 
 
@@ -101,8 +102,10 @@ class BookService:
         title = payload.title.strip()
         subtitle = payload.subtitle.strip() if payload.subtitle else None
         isbn = payload.isbn.strip() if payload.isbn else None
-        authors = [author.strip() for author in payload.authors if author.strip()]
-        subjects = [subject.strip() for subject in payload.subjects if subject.strip()]
+        raw_authors = [author.strip() for author in payload.authors if author.strip()]
+        raw_subjects = [subject.strip() for subject in payload.subjects if subject.strip()]
+        authors = await AuthorityService.canonicalize_authors(db, raw_authors)
+        subjects = await AuthorityService.canonicalize_subjects(db, raw_subjects)
 
         temporary_control_number = "pending"
         marc21_record = payload.marc21_full or BookService.build_simplified_marc21_record(
@@ -120,6 +123,18 @@ class BookService:
             description=payload.description.strip() if payload.description else None,
         )
         if isinstance(marc21_record, dict):
+            if "100" in marc21_record and isinstance(marc21_record.get("100"), dict):
+                field100 = marc21_record["100"]
+                subfields = field100.get("subfields") if isinstance(field100, dict) else None
+                if isinstance(subfields, dict) and authors:
+                    subfields["a"] = authors[0]
+
+            if "650" in marc21_record and isinstance(marc21_record.get("650"), dict):
+                field650 = marc21_record["650"]
+                subfields = field650.get("subfields") if isinstance(field650, dict) else None
+                if isinstance(subfields, dict) and subjects:
+                    subfields["a"] = " | ".join(subjects)
+
             validation_errors = BookService._validate_advanced_marc_record(
                 marc21_record,
                 publication_year=payload.publication_year,
