@@ -16,7 +16,11 @@ async def login(
     payload: LoginRequest,
     db: AsyncSession = Depends(get_db),
 ) -> TokenResponse:
-    tenant_key = request.query_params.get("tenant") or request.headers.get("X-Tenant-ID")
+    tenant_key = (
+        request.headers.get("X-Tenant-Slug")
+        or request.headers.get("X-Tenant-ID")
+        or request.query_params.get("tenant")
+    )
     if not tenant_key or not tenant_key.strip():
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tenant not found")
 

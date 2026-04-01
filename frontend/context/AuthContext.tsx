@@ -79,6 +79,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       window.localStorage.removeItem('access_token');
       window.localStorage.removeItem('token');
       window.localStorage.removeItem('user_email');
+      window.localStorage.removeItem('tenant');
       window.localStorage.removeItem('tenant_id');
     }
 

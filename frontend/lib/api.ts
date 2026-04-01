@@ -79,7 +79,12 @@ export function getStoredTenantId(): string {
     return process.env.NEXT_PUBLIC_DEFAULT_TENANT_ID ?? DEFAULT_TENANT_ID;
   }
 
-  return window.localStorage.getItem('tenant_id') ?? process.env.NEXT_PUBLIC_DEFAULT_TENANT_ID ?? DEFAULT_TENANT_ID;
+  return (
+    window.localStorage.getItem('tenant')
+    ?? window.localStorage.getItem('tenant_id')
+    ?? process.env.NEXT_PUBLIC_DEFAULT_TENANT_ID
+    ?? DEFAULT_TENANT_ID
+  );
 }
 
 export function setStoredTenantId(tenantId: string) {
@@ -87,6 +92,7 @@ export function setStoredTenantId(tenantId: string) {
     return;
   }
 
+  window.localStorage.setItem('tenant', tenantId);
   window.localStorage.setItem('tenant_id', tenantId);
 }
 
@@ -114,11 +120,13 @@ function buildUrl(baseUrl: string, endpoint: string): string {
 
 export async function apiFetch<T = unknown>(url: string, options: RequestInit = {}): Promise<T | null> {
   const token = getStoredToken();
+  const tenant = getStoredTenantId();
   const isProtectedEndpoint = url.startsWith('/api/v1/') && !url.startsWith('/api/v1/auth/login');
 
   if (typeof window !== 'undefined') {
     console.log('[apiFetch] JWT token:', token);
-    console.log('Authorization header:', token ? `Bearer ${token}` : 'sem token');
+    console.log('[apiFetch] Tenant:', tenant);
+    console.log('[apiFetch] Authorization header:', token ? `Bearer ${token}` : 'sem token');
   }
 
   if (isProtectedEndpoint && !token) {
@@ -137,8 +145,13 @@ export async function apiFetch<T = unknown>(url: string, options: RequestInit = 
     headers.set('Accept', 'application/json');
   }
 
-  if (url.startsWith('/api/v1/') && !headers.has('X-Tenant-ID')) {
-    headers.set('X-Tenant-ID', getStoredTenantId());
+  if (url.startsWith('/api/v1/')) {
+    if (!headers.has('X-Tenant-ID')) {
+      headers.set('X-Tenant-ID', tenant);
+    }
+    if (!headers.has('X-Tenant-Slug')) {
+      headers.set('X-Tenant-Slug', tenant);
+    }
   }
 
   if (token && !headers.has('Authorization')) {
