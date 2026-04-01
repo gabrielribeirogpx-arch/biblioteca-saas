@@ -2,6 +2,7 @@ from fastapi import HTTPException, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.library import Library
 from app.models.user import User
 from app.schemas.users import UserCreate, UserOut
 from app.services.auth_service import AuthService
@@ -15,8 +16,12 @@ class UserService:
         ).scalar_one_or_none()
         if existing:
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="User already exists")
+        library = (await db.execute(select(Library).where(Library.id == library_id))).scalar_one_or_none()
+        if library is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Library not found")
 
         user = User(
+            tenant_id=library.tenant_id,
             library_id=library_id,
             email=payload.email.strip().lower(),
             full_name=payload.full_name.strip(),

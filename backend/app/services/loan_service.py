@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.copy import Copy, CopyStatus
 from app.models.fine import Fine, FineStatus
+from app.models.library import Library
 from app.models.loan import Loan, LoanStatus
 from app.models.user import User
 from app.schemas.loans import LoanCreate, LoanOut
@@ -21,12 +22,14 @@ class LoanService:
     @staticmethod
     async def create_loan(db: AsyncSession, payload: LoanCreate, library_id: int, user_id: int) -> LoanOut:
         await LoanService._assert_user_not_blocked(db, library_id, user_id)
+        library = (await db.execute(select(Library).where(Library.id == library_id))).scalar_one_or_none()
 
         copy = await LoanService._get_copy(db, library_id, payload.copy_id)
         if copy.status not in {CopyStatus.AVAILABLE, CopyStatus.RESERVED}:
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Copy is not available for checkout")
 
         loan = Loan(
+            tenant_id=library.tenant_id if library else None,
             library_id=library_id,
             user_id=user_id,
             copy_id=payload.copy_id,
@@ -95,6 +98,7 @@ class LoanService:
             if not existing_fine:
                 db.add(
                     Fine(
+                        tenant_id=library.tenant_id if library else None,
                         library_id=library_id,
                         user_id=loan.user_id,
                         loan_id=loan.id,

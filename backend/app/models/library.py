@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from sqlalchemy import DateTime, ForeignKey, String, func
+from sqlalchemy import DateTime, ForeignKey, String, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base
@@ -8,8 +8,12 @@ from app.models.base import Base
 
 class Library(Base):
     __tablename__ = "libraries"
+    __table_args__ = (UniqueConstraint("tenant_id", "code", name="uq_libraries_tenant_code"),)
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    tenant_id: Mapped[int | None] = mapped_column(
+        ForeignKey("tenants.id", ondelete="RESTRICT"), nullable=True, index=True
+    )
     organization_id: Mapped[int] = mapped_column(
         ForeignKey("organizations.id", ondelete="RESTRICT"), nullable=False, index=True
     )
@@ -24,6 +28,7 @@ class Library(Base):
         DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
     )
 
+    tenant = relationship("Tenant", back_populates="libraries")
     organization = relationship("Organization", back_populates="libraries")
     users = relationship(
         "User",

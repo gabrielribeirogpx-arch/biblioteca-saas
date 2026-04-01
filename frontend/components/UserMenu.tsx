@@ -11,11 +11,12 @@ interface StoredUser {
 }
 
 export function UserMenu() {
-  const { logout, isAuthenticated } = useAuth();
+  const { logout, isAuthenticated, libraryId, setLibraryId } = useAuth();
   const [isOpen, setIsOpen] = useState(false);
   const [email, setEmail] = useState('');
   const [name, setName] = useState('');
   const [tenant, setTenant] = useState('');
+  const [nextLibraryId, setNextLibraryId] = useState('');
 
   useEffect(() => {
     if (typeof window === 'undefined') {
@@ -37,9 +38,10 @@ export function UserMenu() {
     }
 
     setTenant(storedTenant);
+    setNextLibraryId(libraryId ?? '');
     setEmail(parsedUser?.email ?? storedEmail);
     setName(parsedUser?.name ?? parsedUser?.full_name ?? '');
-  }, [isAuthenticated]);
+  }, [isAuthenticated, libraryId]);
 
   const displayName = useMemo(() => {
     if (name.trim()) {
@@ -68,6 +70,27 @@ export function UserMenu() {
           <p className="text-sm font-semibold text-slate-900">{displayName}</p>
           {email ? <p className="text-xs text-slate-600">{email}</p> : null}
           {tenant ? <p className="mt-1 text-xs text-slate-500">Tenant: {tenant}</p> : null}
+          <div className="mt-2">
+            <label className="text-xs text-slate-500">Biblioteca (library_id)</label>
+            <input
+              value={nextLibraryId}
+              onChange={(event) => setNextLibraryId(event.target.value)}
+              className="mt-1 w-full rounded border border-slate-300 px-2 py-1 text-xs"
+              placeholder="Ex.: 1"
+            />
+            <button
+              type="button"
+              className="mt-1 w-full rounded-md bg-slate-700 px-2 py-1 text-xs font-medium text-white hover:bg-slate-800"
+              onClick={() => {
+                const normalized = nextLibraryId.trim();
+                if (normalized) {
+                  setLibraryId(normalized);
+                }
+              }}
+            >
+              Trocar biblioteca
+            </button>
+          </div>
 
           <button
             type="button"

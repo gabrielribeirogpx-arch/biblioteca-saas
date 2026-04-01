@@ -13,6 +13,7 @@ class LoginRequest(BaseModel):
 class TokenPayload(BaseModel):
     sub: int
     role: UserRole
+    tenant_id: int
     library_id: int
     tenant: str
     organization_id: int | None = None

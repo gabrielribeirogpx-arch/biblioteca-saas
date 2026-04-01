@@ -2,13 +2,16 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.copy import Copy, CopyStatus
+from app.models.library import Library
 from app.schemas.copies import CopyCreate, CopyOut
 
 
 class CopyService:
     @staticmethod
     async def create_copy(db: AsyncSession, payload: CopyCreate, library_id: int) -> CopyOut:
+        library = (await db.execute(select(Library).where(Library.id == library_id))).scalar_one_or_none()
         copy = Copy(
+            tenant_id=library.tenant_id if library else None,
             library_id=library_id,
             book_id=payload.book_id,
             barcode=payload.barcode.strip(),

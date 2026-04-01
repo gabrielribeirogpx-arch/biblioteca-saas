@@ -8,12 +8,18 @@ from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.book import Book, BookCategory
+from app.models.library import Library
 from app.schemas.books import AdvancedCatalogRequest, BookCreate, BookLookupResponse, BookOut
 from app.services.authorities import AuthorityService
 from app.services.standards import AACR2Validator, ISO2709Codec, MARC21Service, Z3950Gateway
 
 
 class BookService:
+    @staticmethod
+    async def _resolve_library_tenant_id(db: AsyncSession, library_id: int) -> int | None:
+        library = (await db.execute(select(Library).where(Library.id == library_id))).scalar_one_or_none()
+        return library.tenant_id if library else None
+
     @staticmethod
     async def _get_books_table_columns(db: AsyncSession) -> set[str]:
         result = await db.execute(
@@ -199,7 +205,9 @@ class BookService:
             if validation_errors:
                 raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail={"errors": validation_errors})
 
+        tenant_id = await BookService._resolve_library_tenant_id(db, library_id)
         book = Book(
+            tenant_id=tenant_id,
             library_id=library_id,
             title=title,
             subtitle=subtitle,
@@ -258,7 +266,9 @@ class BookService:
             ],
         }
 
+        tenant_id = await BookService._resolve_library_tenant_id(db, library_id)
         book = Book(
+            tenant_id=tenant_id,
             library_id=library_id,
             title=title,
             subtitle=None,
@@ -393,7 +403,9 @@ class BookService:
         mapped = MARC21Service.map_to_book_fields(normalized)
         book_category = BookCategory(category.lower()) if category.lower() in BookCategory._value2member_map_ else BookCategory.GENERAL
 
+        tenant_id = await BookService._resolve_library_tenant_id(db, library_id)
         book = Book(
+            tenant_id=tenant_id,
             library_id=library_id,
             category=book_category,
             **mapped,
@@ -458,7 +470,9 @@ class BookService:
         for record in records:
             normalized = MARC21Service.normalize_record(record)
             mapped = MARC21Service.map_to_book_fields(normalized)
+            tenant_id = await BookService._resolve_library_tenant_id(db, library_id)
             book = Book(
+                tenant_id=tenant_id,
                 library_id=library_id,
                 category=BookCategory.GENERAL,
                 **mapped,

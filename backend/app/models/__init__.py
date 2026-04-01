@@ -10,6 +10,7 @@ from app.models.loan import Loan, LoanStatus
 from app.models.organization import Organization
 from app.models.reservation import Reservation, ReservationStatus
 from app.models.section import Section
+from app.models.tenant import Tenant
 from app.models.user import User, UserRole
 
 __all__ = [
@@ -35,6 +36,7 @@ __all__ = [
     "ReservationStatus",
     "Subject",
     "Section",
+    "Tenant",
     "User",
     "UserRole",
 ]
