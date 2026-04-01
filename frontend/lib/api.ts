@@ -150,7 +150,13 @@ export function getStoredToken(): string | null {
 }
 
 function getApiBaseUrl(): string {
-  return process.env.NEXT_PUBLIC_API_URL ?? DEFAULT_API_URL;
+  const configuredBaseUrl = process.env.NEXT_PUBLIC_API_URL ?? DEFAULT_API_URL;
+
+  if (typeof window !== 'undefined' && window.location.protocol === 'https:' && configuredBaseUrl.startsWith('http://')) {
+    return configuredBaseUrl.replace(/^http:\/\//i, 'https://');
+  }
+
+  return configuredBaseUrl;
 }
 
 function buildUrl(baseUrl: string, endpoint: string): string {
