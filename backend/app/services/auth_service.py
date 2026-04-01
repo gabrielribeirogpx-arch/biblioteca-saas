@@ -16,6 +16,8 @@ from app.schemas.auth import LoginRequest, TokenPayload, TokenResponse
 from app.services.audit_service import AuditService
 
 
+ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24  # 24 horas
+
 
 class AuthService:
     @staticmethod
@@ -28,20 +30,24 @@ class AuthService:
 
     @staticmethod
     def create_access_token(payload: TokenPayload) -> str:
-        expires_delta = timedelta(minutes=settings.JWT_ACCESS_TOKEN_EXPIRE_MINUTES)
-        exp = datetime.now(timezone.utc) + expires_delta
-        encoded = jwt.encode(
-            {
-                "sub": payload.sub,
-                "role": payload.role.value,
-                "library_id": payload.library_id,
-                "tenant": payload.tenant,
-                "exp": exp,
-            },
-            settings.JWT_SECRET_KEY,
-            algorithm=settings.JWT_ALGORITHM,
-        )
-        return encoded
+        to_encode = {
+            "sub": payload.sub,
+            "role": payload.role.value,
+            "library_id": payload.library_id,
+            "tenant": payload.tenant,
+        }
+
+        expire = datetime.now(timezone.utc) + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+
+        to_encode.update({
+            "exp": expire,
+        })
+
+        print("TOKEN EXPIRA EM:", expire)
+
+        encoded_jwt = jwt.encode(to_encode, settings.JWT_SECRET_KEY, algorithm=settings.JWT_ALGORITHM)
+
+        return encoded_jwt
 
     @staticmethod
     def decode_access_token(token: str) -> TokenPayload:
