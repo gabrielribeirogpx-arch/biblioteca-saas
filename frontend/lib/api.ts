@@ -116,6 +116,7 @@ export async function apiFetch<T = unknown>(url: string, options: RequestInit = 
   const token = getStoredToken();
   if (typeof window !== 'undefined') {
     console.log('[apiFetch] JWT token:', token);
+    console.log('Authorization header:', token ? `Bearer ${token}` : 'sem token');
   }
 
   const headers = new Headers(options.headers);
