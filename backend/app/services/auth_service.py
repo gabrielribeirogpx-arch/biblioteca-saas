@@ -36,6 +36,7 @@ class AuthService:
             "role": payload.role.value,
             "library_id": payload.library_id,
             "tenant": payload.tenant,
+            "organization_id": payload.organization_id,
         }
 
         expire = datetime.now(timezone.utc) + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
@@ -61,6 +62,7 @@ class AuthService:
                 role=decoded["role"],
                 library_id=int(decoded["library_id"]),
                 tenant=str(decoded["tenant"]),
+                organization_id=int(decoded["organization_id"]) if decoded.get("organization_id") is not None else None,
             )
         except (jwt.InvalidTokenError, KeyError, ValueError) as exc:
             raise HTTPException(
@@ -119,6 +121,7 @@ class AuthService:
             role=user.role,
             library_id=tenant.id,
             tenant=tenant.code,
+            organization_id=tenant.organization_id,
         )
         access_token = AuthService.create_access_token(token_payload)
 

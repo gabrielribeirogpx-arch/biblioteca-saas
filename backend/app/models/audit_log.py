@@ -33,6 +33,9 @@ class AuditLog(Base):
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    organization_id: Mapped[int | None] = mapped_column(
+        ForeignKey("organizations.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     library_id: Mapped[int] = mapped_column(
         ForeignKey("libraries.id", ondelete="CASCADE"), nullable=False, index=True
     )
