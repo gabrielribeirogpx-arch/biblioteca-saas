@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
-from sqlalchemy import func, select
+from sqlalchemy import String, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import AuthContext, TenantScopedContext, get_db, get_tenant_context, require_librarian, require_user
@@ -11,6 +11,16 @@ from app.services.audit_service import AuditService
 from app.services.reservation_service import ReservationService
 
 router = APIRouter()
+
+
+def _normalize_reservation_status(raw_status: str) -> str:
+    normalized = raw_status.lower()
+    legacy_status_map = {
+        "queued": ReservationStatus.WAITING.value,
+        "canceled": ReservationStatus.CANCELLED.value,
+        "fulfilled": ReservationStatus.EXPIRED.value,
+    }
+    return legacy_status_map.get(normalized, normalized)
 
 
 @router.post('/', response_model=ReservationOut)
@@ -57,24 +67,37 @@ async def list_reservations(
 ) -> ReservationListResponse:
     offset = (page - 1) * page_size
     total = await db.scalar(select(func.count()).select_from(Reservation).where(Reservation.library_id == ctx.tenant.library_id))
+    reservation_table = Reservation.__table__
     result = await db.execute(
-        select(Reservation)
-        .where(Reservation.library_id == ctx.tenant.library_id)
-        .order_by(Reservation.copy_id.asc(), Reservation.position.asc(), Reservation.id.asc())
+        select(
+            reservation_table.c.id,
+            reservation_table.c.user_id,
+            reservation_table.c.copy_id,
+            reservation_table.c.position,
+            reservation_table.c.status.cast(String).label("status"),
+            reservation_table.c.reserved_at,
+            reservation_table.c.expires_at,
+        )
+        .where(reservation_table.c.library_id == ctx.tenant.library_id)
+        .order_by(
+            reservation_table.c.copy_id.asc(),
+            reservation_table.c.position.asc(),
+            reservation_table.c.id.asc(),
+        )
         .offset(offset)
         .limit(page_size)
     )
     items = [
         ReservationOut(
-            id=row.id,
-            user_id=row.user_id,
-            copy_id=row.copy_id,
-            position=row.position,
-            status=row.status.value,
-            reserved_at=row.reserved_at,
-            expires_at=row.expires_at,
+            id=record.id,
+            user_id=record.user_id,
+            copy_id=record.copy_id,
+            position=record.position,
+            status=_normalize_reservation_status(record.status),
+            reserved_at=record.reserved_at,
+            expires_at=record.expires_at,
         )
-        for row in result.scalars().all()
+        for record in result.all()
     ]
     return ReservationListResponse(items=items, page=page, page_size=page_size, total=total or 0)
 
