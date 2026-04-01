@@ -7,6 +7,7 @@ class LoginRequest(BaseModel):
     email: str | None = None
     username: str | None = None
     password: str
+    tenant: str | None = None
 
 
 class TokenPayload(BaseModel):
