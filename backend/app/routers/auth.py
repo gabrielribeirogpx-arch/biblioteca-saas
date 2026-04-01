@@ -16,22 +16,30 @@ async def login(
     body: LoginRequest,
     db: AsyncSession = Depends(get_db),
 ) -> TokenResponse:
-    tenant = (
-        request.headers.get("X-Tenant-ID")
-        or request.headers.get("X-Tenant-Slug")
-        or body.tenant
-    )
-    library_id = request.headers.get("X-Library-ID")
-    if not tenant or not tenant.strip():
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Tenant obrigatório")
+    try:
+        tenant = (
+            request.headers.get("X-Tenant-ID")
+            or request.headers.get("X-Tenant-Slug")
+            or body.tenant
+        )
+        library_id = request.headers.get("X-Library-ID")
+        if not tenant or not tenant.strip():
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Tenant obrigatório")
 
-    tenant = tenant.strip()
-    query = select(Library).where(Library.code == tenant)
-    if library_id and library_id.strip().isdigit():
-        query = select(Library).where(Library.id == int(library_id.strip()))
-    library = (await db.execute(query)).scalar_one_or_none()
+        tenant = tenant.strip()
+        query = select(Library).where(Library.code == tenant)
+        if library_id and library_id.strip().isdigit():
+            query = select(Library).where(Library.id == int(library_id.strip()))
+        library = (await db.execute(query)).scalar_one_or_none()
 
-    if not library:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Tenant não encontrado")
+        if not library:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Tenant não encontrado")
 
-    return await AuthService.login(db, body, library)
+        return await AuthService.login(db, body, library)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Requisição de login inválida",
+        ) from exc

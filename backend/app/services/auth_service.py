@@ -22,7 +22,10 @@ ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24  # 24 horas
 class AuthService:
     @staticmethod
     def verify_password(password: str, hashed: str) -> bool:
-        return bcrypt.checkpw(password.encode(), hashed.encode())
+        try:
+            return bcrypt.checkpw(password.encode(), hashed.encode())
+        except (TypeError, ValueError):
+            return False
 
     @staticmethod
     def hash_password(password: str) -> str:
@@ -74,71 +77,85 @@ class AuthService:
 
     @staticmethod
     async def login(db: AsyncSession, payload: LoginRequest, tenant: Library) -> TokenResponse:
-        login_identifier = (payload.email or payload.username or "").strip().lower()
-        if not login_identifier:
-            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="email is required")
+        try:
+            login_identifier = (payload.email or payload.username or "").strip().lower()
+            if not login_identifier:
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="email is required")
 
-        user = (
-            await db.execute(
-                select(User).where(
-                    User.library_id == tenant.id,
-                    User.email == login_identifier,
+            user = (
+                await db.execute(
+                    select(User).where(
+                        User.tenant_id == tenant.tenant_id,
+                        User.email == login_identifier,
+                    )
                 )
-            )
-        ).scalar_one_or_none()
+            ).scalar_one_or_none()
 
-        if not user or not user.is_active:
+            print("Tenant:", tenant.id)
+            print("User:", user)
+
+            if not user:
+                raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Usuário não encontrado")
+
+            if not user.is_active:
+                await AuditService.log_event(
+                    db=db,
+                    library_id=tenant.id,
+                    category=AuditCategory.AUTH,
+                    actor_type=AuditActorType.SYSTEM,
+                    actor_id=None,
+                    action="auth.login_failed",
+                    entity_type="user",
+                    entity_id=login_identifier,
+                    summary="Failed login attempt",
+                    payload={"email": login_identifier},
+                )
+                raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Credenciais inválidas")
+
+            hashed_password = getattr(user, "hashed_password", user.password_hash)
+            if not AuthService.verify_password(payload.password, hashed_password):
+                await AuditService.log_event(
+                    db=db,
+                    library_id=tenant.id,
+                    category=AuditCategory.AUTH,
+                    actor_type=AuditActorType.SYSTEM,
+                    actor_id=None,
+                    action="auth.login_failed",
+                    entity_type="user",
+                    entity_id=login_identifier,
+                    summary="Failed login attempt",
+                    payload={"email": login_identifier},
+                )
+                raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Credenciais inválidas")
+
+            token_payload = TokenPayload(
+                sub=user.id,
+                role=user.role,
+                library_id=user.library_id or tenant.id,
+                tenant_id=user.tenant_id or tenant.tenant_id or tenant.organization_id,
+                tenant=tenant.code,
+                organization_id=tenant.organization_id,
+            )
+            access_token = AuthService.create_access_token(token_payload)
+
             await AuditService.log_event(
                 db=db,
                 library_id=tenant.id,
                 category=AuditCategory.AUTH,
-                actor_type=AuditActorType.SYSTEM,
-                actor_id=None,
-                action="auth.login_failed",
+                actor_type=AuditActorType.USER,
+                actor_id=user.id,
+                action="auth.login_success",
                 entity_type="user",
-                entity_id=login_identifier,
-                summary="Failed login attempt",
-                payload={"email": login_identifier},
+                entity_id=str(user.id),
+                summary="User logged in",
+                payload={"email": user.email, "role": user.role.value},
             )
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Credenciais inválidas")
 
-        hashed_password = getattr(user, "hashed_password", user.password_hash)
-        if not AuthService.verify_password(payload.password, hashed_password):
-            await AuditService.log_event(
-                db=db,
-                library_id=tenant.id,
-                category=AuditCategory.AUTH,
-                actor_type=AuditActorType.SYSTEM,
-                actor_id=None,
-                action="auth.login_failed",
-                entity_type="user",
-                entity_id=login_identifier,
-                summary="Failed login attempt",
-                payload={"email": login_identifier},
-            )
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Credenciais inválidas")
-
-        token_payload = TokenPayload(
-            sub=user.id,
-            role=user.role,
-            library_id=tenant.id,
-            tenant_id=tenant.tenant_id or tenant.organization_id,
-            tenant=tenant.code,
-            organization_id=tenant.organization_id,
-        )
-        access_token = AuthService.create_access_token(token_payload)
-
-        await AuditService.log_event(
-            db=db,
-            library_id=tenant.id,
-            category=AuditCategory.AUTH,
-            actor_type=AuditActorType.USER,
-            actor_id=user.id,
-            action="auth.login_success",
-            entity_type="user",
-            entity_id=str(user.id),
-            summary="User logged in",
-            payload={"email": user.email, "role": user.role.value},
-        )
-
-        return TokenResponse(access_token=access_token)
+            return TokenResponse(access_token=access_token)
+        except HTTPException:
+            raise
+        except Exception as exc:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Falha no processo de autenticação",
+            ) from exc
