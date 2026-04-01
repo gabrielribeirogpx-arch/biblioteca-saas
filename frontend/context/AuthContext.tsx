@@ -38,19 +38,31 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setIsLoading(false);
   }, []);
 
+  const logout = useCallback(() => {
+    if (typeof window !== 'undefined') {
+      window.localStorage.removeItem('access_token');
+      window.localStorage.removeItem('token');
+      window.localStorage.removeItem('tenant');
+      window.localStorage.removeItem('tenant_id');
+      window.localStorage.removeItem('user');
+      window.localStorage.removeItem('user_email');
+      window.dispatchEvent(new Event('auth:logout'));
+      window.location.href = '/login';
+    }
+
+    setToken(null);
+    setUser(null);
+  }, []);
+
   useEffect(() => {
     if (typeof window === 'undefined') {
       return;
     }
 
-    const handleUnauthorized = () => {
-      setToken(null);
-      setUser(null);
-    };
-
-    window.addEventListener('auth:unauthorized', handleUnauthorized);
-    return () => window.removeEventListener('auth:unauthorized', handleUnauthorized);
-  }, []);
+    const handleLogout = () => logout();
+    window.addEventListener('auth:unauthorized', handleLogout);
+    return () => window.removeEventListener('auth:unauthorized', handleLogout);
+  }, [logout]);
 
   const login = useCallback(async (email: string, password: string, tenantId?: string) => {
     const resolvedTenantId = (tenantId ?? getStoredTenantId()).trim();
@@ -87,19 +99,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     setToken(normalizedToken);
     setUser({ email: sanitizedEmail });
-  }, []);
-
-  const logout = useCallback(() => {
-    if (typeof window !== 'undefined') {
-      window.localStorage.removeItem('access_token');
-      window.localStorage.removeItem('token');
-      window.localStorage.removeItem('user_email');
-      window.localStorage.removeItem('tenant');
-      window.localStorage.removeItem('tenant_id');
-    }
-
-    setToken(null);
-    setUser(null);
   }, []);
 
   const value = useMemo(
