@@ -9,6 +9,7 @@ from typing import Sequence, Union
 
 from alembic import op
 import sqlalchemy as sa
+from sqlalchemy import inspect
 
 
 revision: str = "0008_library_policy_and_active_flag"
@@ -18,21 +19,28 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    op.add_column(
-        "libraries",
-        sa.Column("is_active", sa.Boolean(), nullable=False, server_default=sa.text("true")),
-    )
+    bind = op.get_bind()
+    inspector = inspect(bind)
+    library_columns = {column["name"] for column in inspector.get_columns("libraries")}
 
-    op.create_table(
-        "library_policies",
-        sa.Column("library_id", sa.Integer(), nullable=False),
-        sa.Column("max_loans", sa.Integer(), nullable=False, server_default="5"),
-        sa.Column("loan_days", sa.Integer(), nullable=False, server_default="14"),
-        sa.Column("fine_per_day", sa.Numeric(10, 2), nullable=False, server_default="1.00"),
-        sa.Column("renewal_limit", sa.Integer(), nullable=False, server_default="2"),
-        sa.ForeignKeyConstraint(["library_id"], ["libraries.id"], ondelete="CASCADE"),
-        sa.PrimaryKeyConstraint("library_id"),
-    )
+    if "is_active" not in library_columns:
+        op.add_column(
+            "libraries",
+            sa.Column("is_active", sa.Boolean(), nullable=False, server_default=sa.text("true")),
+        )
+
+    existing_tables = set(inspector.get_table_names())
+    if "library_policies" not in existing_tables:
+        op.create_table(
+            "library_policies",
+            sa.Column("library_id", sa.Integer(), nullable=False),
+            sa.Column("max_loans", sa.Integer(), nullable=False, server_default="5"),
+            sa.Column("loan_days", sa.Integer(), nullable=False, server_default="14"),
+            sa.Column("fine_per_day", sa.Numeric(10, 2), nullable=False, server_default="1.00"),
+            sa.Column("renewal_limit", sa.Integer(), nullable=False, server_default="2"),
+            sa.ForeignKeyConstraint(["library_id"], ["libraries.id"], ondelete="CASCADE"),
+            sa.PrimaryKeyConstraint("library_id"),
+        )
 
 
 def downgrade() -> None:

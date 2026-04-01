@@ -9,6 +9,7 @@ from typing import Sequence, Union
 
 from alembic import op
 import sqlalchemy as sa
+from sqlalchemy import inspect
 
 
 # revision identifiers, used by Alembic.
@@ -19,7 +20,12 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    op.add_column("reservations", sa.Column("position", sa.Integer(), nullable=True))
+    bind = op.get_bind()
+    inspector = inspect(bind)
+    reservation_columns = {column["name"] for column in inspector.get_columns("reservations")}
+
+    if "position" not in reservation_columns:
+        op.add_column("reservations", sa.Column("position", sa.Integer(), nullable=True))
 
     op.execute(
         """
@@ -32,34 +38,49 @@ def upgrade() -> None:
         SET position = ranked.row_num
         FROM ranked
         WHERE r.id = ranked.id
+          AND (r.position IS NULL OR r.position <> ranked.row_num)
         """
     )
 
     op.alter_column("reservations", "position", nullable=False)
-    op.create_index(
-        "ix_reservations_library_copy_status_position",
-        "reservations",
-        ["library_id", "copy_id", "status", "position"],
-        unique=False,
-    )
-
-    op.execute("ALTER TYPE reservation_status RENAME TO reservation_status_old")
-    op.execute("CREATE TYPE reservation_status AS ENUM ('WAITING', 'READY', 'EXPIRED', 'CANCELLED')")
-    op.execute(
-        """
-        ALTER TABLE reservations
-        ALTER COLUMN status TYPE reservation_status
-        USING (
-            CASE
-                WHEN status::text = 'QUEUED' THEN 'WAITING'::reservation_status
-                WHEN status::text = 'CANCELED' THEN 'CANCELLED'::reservation_status
-                WHEN status::text = 'FULFILLED' THEN 'EXPIRED'::reservation_status
-                ELSE status::text::reservation_status
-            END
+    reservation_indexes = {index["name"] for index in inspector.get_indexes("reservations")}
+    if "ix_reservations_library_copy_status_position" not in reservation_indexes:
+        op.create_index(
+            "ix_reservations_library_copy_status_position",
+            "reservations",
+            ["library_id", "copy_id", "status", "position"],
+            unique=False,
         )
-        """
-    )
-    op.execute("DROP TYPE reservation_status_old")
+
+    enum_labels = bind.execute(
+        sa.text(
+            """
+            SELECT e.enumlabel
+            FROM pg_type t
+            JOIN pg_enum e ON e.enumtypid = t.oid
+            WHERE t.typname = 'reservation_status'
+            ORDER BY e.enumsortorder
+            """
+        )
+    ).scalars().all()
+    if "WAITING" not in enum_labels:
+        op.execute("ALTER TYPE reservation_status RENAME TO reservation_status_old")
+        op.execute("CREATE TYPE reservation_status AS ENUM ('WAITING', 'READY', 'EXPIRED', 'CANCELLED')")
+        op.execute(
+            """
+            ALTER TABLE reservations
+            ALTER COLUMN status TYPE reservation_status
+            USING (
+                CASE
+                    WHEN status::text = 'QUEUED' THEN 'WAITING'::reservation_status
+                    WHEN status::text = 'CANCELED' THEN 'CANCELLED'::reservation_status
+                    WHEN status::text = 'FULFILLED' THEN 'EXPIRED'::reservation_status
+                    ELSE status::text::reservation_status
+                END
+            )
+            """
+        )
+        op.execute("DROP TYPE reservation_status_old")
 
 
 def downgrade() -> None:
