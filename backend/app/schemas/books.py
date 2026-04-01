@@ -47,6 +47,7 @@ class AdvancedCatalogRequest(BaseModel):
     language: str | None = Field(default=None, max_length=64)
     pages: int | None = Field(default=None, ge=1, le=100000)
     description: str | None = None
+    marc21_full: dict[str, Any] | None = None
 
 
 class AdvancedCatalogResponse(BaseModel):
