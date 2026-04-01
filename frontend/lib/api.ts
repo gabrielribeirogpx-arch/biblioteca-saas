@@ -95,7 +95,7 @@ export function getStoredToken(): string | null {
     return null;
   }
 
-  return window.localStorage.getItem('token');
+  return window.localStorage.getItem('access_token') ?? window.localStorage.getItem('token');
 }
 
 function getApiBaseUrl(): string {
@@ -113,7 +113,10 @@ function buildUrl(baseUrl: string, endpoint: string): string {
 }
 
 export async function apiFetch<T = unknown>(url: string, options: RequestInit = {}): Promise<T | null> {
-  const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+  const token = getStoredToken();
+  if (typeof window !== 'undefined') {
+    console.log('[apiFetch] JWT token:', token);
+  }
 
   const headers = new Headers(options.headers);
   if (!headers.has('Content-Type') && options.body) {
@@ -140,6 +143,7 @@ export async function apiFetch<T = unknown>(url: string, options: RequestInit = 
 
   if (response.status === 401) {
     if (typeof window !== 'undefined') {
+      localStorage.removeItem('access_token');
       localStorage.removeItem('token');
       localStorage.removeItem('user_email');
       localStorage.removeItem('tenant_id');
