@@ -114,9 +114,18 @@ function buildUrl(baseUrl: string, endpoint: string): string {
 
 export async function apiFetch<T = unknown>(url: string, options: RequestInit = {}): Promise<T | null> {
   const token = getStoredToken();
+  const isProtectedEndpoint = url.startsWith('/api/v1/') && !url.startsWith('/api/v1/auth/login');
+
   if (typeof window !== 'undefined') {
     console.log('[apiFetch] JWT token:', token);
     console.log('Authorization header:', token ? `Bearer ${token}` : 'sem token');
+  }
+
+  if (isProtectedEndpoint && !token) {
+    if (typeof window !== 'undefined') {
+      console.warn('Token ainda não disponível - abortando request');
+    }
+    return null;
   }
 
   const headers = new Headers(options.headers);

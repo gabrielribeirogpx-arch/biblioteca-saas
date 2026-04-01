@@ -65,18 +65,24 @@ export default function DashboardPage() {
     error: null
   });
   const [ready, setReady] = useState(false);
+  const [token, setToken] = useState<string | null>(null);
 
   useEffect(() => {
-    const token = localStorage.getItem('access_token') ?? localStorage.getItem('token');
-    if (!token) {
+    const storedToken = localStorage.getItem('access_token') ?? localStorage.getItem('token');
+
+    console.log('Token carregado:', storedToken);
+
+    if (!storedToken) {
       router.push('/login');
       return;
     }
+
+    setToken(storedToken);
     setReady(true);
   }, [router]);
 
   useEffect(() => {
-    if (!ready) {
+    if (!ready || !token) {
       return;
     }
 
@@ -85,8 +91,8 @@ export default function DashboardPage() {
     async function fetchDashboardData() {
       setState({ books: null, copies: null, loans: null, loading: true, error: null });
 
-      const token = getStoredToken();
-      if (!token) {
+      const storedToken = getStoredToken();
+      if (!storedToken) {
         if (isMounted) {
           setState({ books: null, copies: null, loans: null, loading: false, error: null });
         }
@@ -114,14 +120,14 @@ export default function DashboardPage() {
     return () => {
       isMounted = false;
     };
-  }, [ready]);
+  }, [ready, token]);
 
   const totalBooks = getCollectionTotal<Book>(state.books);
   const totalCopies = getCollectionTotal<Copy>(state.copies);
   const activeLoans = getCollectionTotal<Loan>(state.loans);
 
   if (!ready) {
-    return <div>Carregando...</div>;
+    return <div>Carregando autenticação...</div>;
   }
 
   return (
