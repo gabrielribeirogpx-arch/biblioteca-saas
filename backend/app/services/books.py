@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from fastapi import HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.book import Book, BookCategory
@@ -46,10 +46,19 @@ class BookService:
         return BookService._to_schema(book)
 
     @staticmethod
-    async def list_books(db: AsyncSession, library_id: int) -> list[BookOut]:
-        result = await db.execute(select(Book).where(Book.library_id == library_id).order_by(Book.id.asc()))
+    async def list_books(db: AsyncSession, library_id: int, page: int = 1, page_size: int = 20) -> dict:
+        offset = (page - 1) * page_size
+        total = await db.scalar(select(func.count()).select_from(Book).where(Book.library_id == library_id))
+        result = await db.execute(
+            select(Book).where(Book.library_id == library_id).order_by(Book.id.asc()).offset(offset).limit(page_size)
+        )
         books = result.scalars().all()
-        return [BookService._to_schema(book) for book in books]
+        return {
+            "items": [BookService._to_schema(book) for book in books],
+            "page": page,
+            "page_size": page_size,
+            "total": total or 0,
+        }
 
     @staticmethod
     async def import_marc21_record(

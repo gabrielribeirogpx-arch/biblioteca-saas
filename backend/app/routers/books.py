@@ -15,6 +15,7 @@ from app.schemas.books import (
     AACR2ValidateRequest,
     AACR2ValidateResponse,
     BookCreate,
+    BookListResponse,
     BookOut,
     MARC21ExportResponse,
     MARC21ImportRequest,
@@ -28,13 +29,15 @@ from app.services.books import BookService
 router = APIRouter()
 
 
-@router.get("/", response_model=list[BookOut], dependencies=[Depends(get_current_user)])
+@router.get("/", response_model=BookListResponse, dependencies=[Depends(get_current_user)])
 async def list_books(
+    page: int = 1,
+    page_size: int = 20,
     db: AsyncSession = Depends(get_db),
     ctx: TenantScopedContext = Depends(get_tenant_context),
     auth: AuthContext = Depends(require_user),
-) -> list[BookOut]:
-    return await BookService.list_books(db, ctx.tenant.library_id)
+) -> BookListResponse:
+    return await BookService.list_books(db, ctx.tenant.library_id, page=page, page_size=page_size)
 
 
 @router.post("/", response_model=BookOut, dependencies=[Depends(get_current_user)])

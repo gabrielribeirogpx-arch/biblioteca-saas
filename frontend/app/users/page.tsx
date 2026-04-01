@@ -27,13 +27,13 @@ export default function UsersPage() {
       return;
     }
 
-    apiFetch<User[]>('/api/v1/users/')
+    apiFetch<{ items: User[] }>('/api/v1/users/?page=1&page_size=50')
       .then((users) => {
         if (!isMounted || !users) {
           return;
         }
         setRows(
-          users.map((user) => ({
+          (users.items ?? []).map((user) => ({
             id: user.id,
             full_name: user.full_name,
             email: user.email,

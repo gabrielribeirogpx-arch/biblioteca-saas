@@ -150,6 +150,7 @@ class TenantService:
             admin_user.library_id = tenant.id
             db.add(admin_user)
             await db.commit()
+            await db.refresh(admin_user)
 
             token = AuthService.create_access_token(
                 TokenPayload(

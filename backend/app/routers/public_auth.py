@@ -14,12 +14,10 @@ async def register(
     request_data: dict = Body(...),
     db: AsyncSession = Depends(get_db),
 ) -> RegisterResponse:
-    print(request_data)
     try:
         payload = RegisterRequest.model_validate(request_data)
     except ValidationError as exc:
         validation_errors = exc.errors()
-        print(validation_errors)
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=validation_errors,

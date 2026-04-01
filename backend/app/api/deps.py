@@ -171,9 +171,6 @@ async def get_current_user(
         or request.query_params.get("tenant")
     )
 
-    print("AUTH HEADER:", auth_header)
-    print("TENANT:", tenant_slug)
-
     if not auth_header:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing auth header")
     if not auth_header.startswith("Bearer "):
@@ -187,9 +184,7 @@ async def get_current_user(
             settings.JWT_SECRET_KEY,
             algorithms=[settings.JWT_ALGORITHM],
         )
-        print("PAYLOAD:", payload)
-    except Exception as e:
-        print("JWT ERROR:", str(e))
+    except Exception:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token inválido") from None
 
     user_id = payload.get("sub")
@@ -231,8 +226,6 @@ async def get_current_user(
             )
         )
     ).scalar_one_or_none()
-
-    print("USER FOUND:", user)
 
     if not user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")

@@ -28,13 +28,13 @@ export default function LoansPage() {
       return;
     }
 
-    apiFetch<Loan[]>('/api/v1/loans/')
+    apiFetch<{ items: Loan[] }>('/api/v1/loans/?page=1&page_size=50')
       .then((loans) => {
         if (!isMounted || !loans) {
           return;
         }
         setRows(
-          loans.map((loan) => ({
+          (loans.items ?? []).map((loan) => ({
             id: loan.id,
             copy_id: loan.copy_id,
             user_id: loan.user_id,

@@ -39,12 +39,23 @@ class LoanService:
         return LoanService._to_schema(loan)
 
     @staticmethod
-    async def list_loans(db: AsyncSession, library_id: int) -> list[LoanOut]:
+    async def list_loans(db: AsyncSession, library_id: int, page: int = 1, page_size: int = 20) -> dict:
         await LoanService.mark_overdue_loans(db, library_id)
+        offset = (page - 1) * page_size
+        total = await db.scalar(select(func.count()).select_from(Loan).where(Loan.library_id == library_id))
         result = await db.execute(
-            select(Loan).where(Loan.library_id == library_id).order_by(Loan.checkout_at.desc(), Loan.id.desc())
+            select(Loan)
+            .where(Loan.library_id == library_id)
+            .order_by(Loan.checkout_at.desc(), Loan.id.desc())
+            .offset(offset)
+            .limit(page_size)
         )
-        return [LoanService._to_schema(row) for row in result.scalars().all()]
+        return {
+            "items": [LoanService._to_schema(row) for row in result.scalars().all()],
+            "page": page,
+            "page_size": page_size,
+            "total": total or 0,
+        }
 
     @staticmethod
     async def renew_loan(db: AsyncSession, library_id: int, loan_id: int, renewal_days: int = RENEWAL_WINDOW_DAYS) -> LoanOut:

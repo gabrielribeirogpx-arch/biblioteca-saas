@@ -33,6 +33,18 @@ export const APP_NAVIGATION: NavItem[] = [
     roles: ['super_admin', 'librarian']
   },
   {
+    href: '/reservations',
+    label: 'Reservations',
+    description: 'Track book reservations and queue status',
+    roles: ['super_admin', 'librarian', 'assistant', 'member']
+  },
+  {
+    href: '/fines',
+    label: 'Fines',
+    description: 'Review and settle overdue fines',
+    roles: ['super_admin', 'librarian', 'assistant']
+  },
+  {
     href: '/reports',
     label: 'Reports',
     description: 'Track KPIs and compliance reporting',

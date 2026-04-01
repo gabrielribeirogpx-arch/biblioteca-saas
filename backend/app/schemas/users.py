@@ -14,3 +14,10 @@ class UserOut(UserCreate):
     id: int
     role: UserRole
     password: str | None = None
+
+
+class UserListResponse(BaseModel):
+    items: list[UserOut]
+    page: int
+    page_size: int
+    total: int
