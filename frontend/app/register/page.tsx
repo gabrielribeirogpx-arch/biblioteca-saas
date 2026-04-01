@@ -134,6 +134,7 @@ export default function RegisterPage() {
       }
 
       if (data.token && typeof window !== 'undefined') {
+        window.localStorage.setItem('access_token', data.token);
         window.localStorage.setItem('token', data.token);
         window.localStorage.setItem('user_email', email);
       }

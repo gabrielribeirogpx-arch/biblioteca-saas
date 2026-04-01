@@ -1,5 +1,6 @@
 'use client';
 
+import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 
 import { ProtectedRoute } from '../../components/auth/ProtectedRoute';
@@ -54,6 +55,7 @@ function getCollectionTotal<T>(payload: CollectionPayload<T>): number {
 }
 
 export default function DashboardPage() {
+  const router = useRouter();
   const role: UserRole = 'librarian';
   const [state, setState] = useState<DashboardState>({
     books: null,
@@ -62,6 +64,13 @@ export default function DashboardPage() {
     loading: true,
     error: null
   });
+
+  useEffect(() => {
+    const token = localStorage.getItem('access_token') ?? localStorage.getItem('token');
+    if (!token) {
+      router.push('/login');
+    }
+  }, [router]);
 
   useEffect(() => {
     let isMounted = true;

@@ -30,7 +30,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    const storedToken = window.localStorage.getItem('token');
+    const storedToken = window.localStorage.getItem('access_token') ?? window.localStorage.getItem('token');
     const storedEmail = window.localStorage.getItem('user_email');
 
     setToken(storedToken);
@@ -68,6 +68,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     if (typeof window !== 'undefined') {
+      window.localStorage.setItem('access_token', data.access_token);
       window.localStorage.setItem('token', data.access_token);
       window.localStorage.setItem('user_email', sanitizedEmail);
       setStoredTenantId(resolvedTenantId);
@@ -79,6 +80,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const logout = useCallback(() => {
     if (typeof window !== 'undefined') {
+      window.localStorage.removeItem('access_token');
       window.localStorage.removeItem('token');
       window.localStorage.removeItem('user_email');
       window.localStorage.removeItem('tenant_id');
