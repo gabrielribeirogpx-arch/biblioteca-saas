@@ -12,9 +12,10 @@ export default function LoginPage() {
   const searchParams = useSearchParams();
   const [email, setEmail] = useState(searchParams.get('email') ?? '');
   const [password, setPassword] = useState('');
+  const [tenant, setTenant] = useState(searchParams.get('tenant') ?? '');
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  const tenantParam = searchParams.get('tenant') ?? undefined;
+  const tenantParam = tenant.trim() || undefined;
 
   useEffect(() => {
     if (!isLoading && isAuthenticated) {
@@ -72,6 +73,18 @@ export default function LoginPage() {
             required
             type="password"
             value={password}
+          />
+        </label>
+
+        <label className="block text-sm font-medium text-slate-700">
+          Tenant
+          <input
+            className="mt-1 w-full rounded-lg border px-3 py-2"
+            name="tenant"
+            onChange={(event) => setTenant(event.target.value)}
+            placeholder="ex: biblioteca-municipal"
+            required
+            value={tenant}
           />
         </label>
 
