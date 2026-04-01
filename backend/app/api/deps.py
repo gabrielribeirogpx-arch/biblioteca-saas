@@ -163,12 +163,16 @@ async def get_current_user(
     from app.models.user import User
 
     auth_header = request.headers.get("Authorization")
-    tenant_slug = request.headers.get("X-Tenant-Slug")
+    tenant_slug = (
+        request.headers.get("X-Tenant-Slug")
+        or request.headers.get("X-Tenant-ID")
+        or request.query_params.get("tenant")
+    )
 
     if not auth_header or not auth_header.startswith("Bearer "):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token ausente")
 
-    token = auth_header.split(" ")[1]
+    token = auth_header.split(" ", 1)[1].strip()
 
     try:
         decoded_payload: TokenPayload = AuthService.decode_access_token(token)
@@ -182,6 +186,7 @@ async def get_current_user(
     if not user_id or not tenant_slug:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Credenciais inválidas")
 
+    tenant_slug = tenant_slug.strip()
     if token_tenant != tenant_slug:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Tenant mismatch")
 

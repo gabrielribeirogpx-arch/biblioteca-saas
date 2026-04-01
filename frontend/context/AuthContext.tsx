@@ -62,15 +62,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (!data?.access_token) {
       throw new Error('Token de acesso não retornado pela API');
     }
+    const normalizedToken = data.access_token.trim().replace(/^Bearer\s+/i, '');
 
     if (typeof window !== 'undefined') {
-      window.localStorage.setItem('access_token', data.access_token);
-      window.localStorage.setItem('token', data.access_token);
+      window.localStorage.setItem('access_token', normalizedToken);
+      window.localStorage.setItem('token', normalizedToken);
       window.localStorage.setItem('user_email', sanitizedEmail);
       setStoredTenantId(resolvedTenantId);
     }
 
-    setToken(data.access_token);
+    setToken(normalizedToken);
     setUser({ email: sanitizedEmail });
   }, []);
 
