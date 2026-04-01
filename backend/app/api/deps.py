@@ -5,9 +5,11 @@ from dataclasses import dataclass
 
 from fastapi import Depends, Header, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+import jwt
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
 from app.db.session import AsyncSessionLocal
 from app.models.audit_log import AuditActorType, AuditCategory
 from app.models.library import Library
@@ -169,25 +171,42 @@ async def get_current_user(
         or request.query_params.get("tenant")
     )
 
-    if not auth_header or not auth_header.startswith("Bearer "):
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token ausente")
+    print("AUTH HEADER:", auth_header)
+    print("TENANT:", tenant_slug)
+
+    if not auth_header:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing auth header")
+    if not auth_header.startswith("Bearer "):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid auth scheme")
 
     token = auth_header.split(" ", 1)[1].strip()
 
     try:
-        decoded_payload: TokenPayload = AuthService.decode_access_token(token)
-        payload = decoded_payload.model_dump()
-    except Exception:
+        payload = jwt.decode(
+            token,
+            settings.JWT_SECRET_KEY,
+            algorithms=[settings.JWT_ALGORITHM],
+        )
+        print("PAYLOAD:", payload)
+    except Exception as e:
+        print("JWT ERROR:", str(e))
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token inválido") from None
 
     user_id = payload.get("sub")
     token_tenant = payload.get("tenant")
 
-    if not user_id or not tenant_slug:
+    if not user_id:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
+
+    if tenant_slug:
+        tenant_slug = tenant_slug.strip()
+    elif token_tenant:
+        tenant_slug = str(token_tenant).strip()
+
+    if not tenant_slug:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Credenciais inválidas")
 
-    tenant_slug = tenant_slug.strip()
-    if token_tenant != tenant_slug:
+    if token_tenant and str(token_tenant).strip() != tenant_slug:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Tenant mismatch")
 
     tenant = (
@@ -209,11 +228,10 @@ async def get_current_user(
         )
     ).scalar_one_or_none()
 
+    print("USER FOUND:", user)
+
     if not user:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Usuário não pertence ao tenant",
-        )
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
     if not user.is_active:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid authentication token")
     return user
