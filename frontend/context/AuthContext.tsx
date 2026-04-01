@@ -18,7 +18,6 @@ interface AuthContextValue {
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
-const FALLBACK_TENANT_ID = 'biblioteca-municipal';
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [token, setToken] = useState<string | null>(null);
@@ -40,7 +39,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const login = useCallback(async (email: string, password: string, tenantId?: string) => {
-    const resolvedTenantId = (tenantId ?? getStoredTenantId() ?? FALLBACK_TENANT_ID).trim() || FALLBACK_TENANT_ID;
+    const resolvedTenantId = (tenantId ?? getStoredTenantId()).trim();
+
+    if (!resolvedTenantId) {
+      throw new Error('Informe o tenant para acessar sua biblioteca');
+    }
     const sanitizedEmail = email.trim();
     const sanitizedPassword = password;
     const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL ?? '';
