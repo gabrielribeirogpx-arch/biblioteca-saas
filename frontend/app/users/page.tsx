@@ -27,7 +27,7 @@ export default function UsersPage() {
       return;
     }
 
-    apiFetch<User[]>('/api/v1/users')
+    apiFetch<User[]>('/api/v1/users/')
       .then((users) => {
         if (!isMounted || !users) {
           return;

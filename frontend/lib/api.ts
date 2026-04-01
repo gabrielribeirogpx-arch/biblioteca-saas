@@ -241,7 +241,7 @@ export async function getLoans(): Promise<Loan[]> {
 }
 
 export async function getUsers(): Promise<User[]> {
-  return (await apiFetch<User[]>('/api/v1/users')) ?? [];
+  return (await apiFetch<User[]>('/api/v1/users/')) ?? [];
 }
 
 export async function getReports(): Promise<ReportSummary> {
