@@ -74,11 +74,13 @@ async def resolve_tenant(
     request: Request,
     db: AsyncSession = Depends(get_db),
     x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
+    x_tenant_slug: str | None = Header(default=None, alias="X-Tenant-Slug"),
     tenant_query: str | None = None,
 ) -> TenantContext:
     tenant_query = tenant_query or request.query_params.get("tenant")
     tenant_key = (
-        x_tenant_id
+        x_tenant_slug
+        or x_tenant_id
         or tenant_query
         or _extract_subdomain(request.headers.get("host"))
         or DEFAULT_TENANT_CODE
@@ -108,7 +110,8 @@ async def resolve_tenant(
 
 async def get_tenant_from_request(request: Request, db: AsyncSession) -> Library | None:
     tenant_key = (
-        request.headers.get("X-Tenant-ID")
+        request.headers.get("X-Tenant-Slug")
+        or request.headers.get("X-Tenant-ID")
         or request.query_params.get("tenant")
     )
     if not tenant_key:
@@ -132,6 +135,9 @@ async def get_auth_context(
     request: Request,
     credentials: HTTPAuthorizationCredentials | None = Depends(_bearer),
 ) -> AuthContext:
+    print("AUTH HEADER:", request.headers.get("Authorization"))
+    print("TENANT HEADER:", request.headers.get("X-Tenant-Slug") or request.headers.get("X-Tenant-ID"))
+
     if not credentials:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing bearer token")
 
@@ -162,10 +168,11 @@ async def get_current_tenant(
     request: Request,
     db: AsyncSession = Depends(get_db),
     x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
+    x_tenant_slug: str | None = Header(default=None, alias="X-Tenant-Slug"),
     user=Depends(get_current_user),
 ) -> TenantContext:
     tenant_query = request.query_params.get("tenant")
-    tenant_key = (x_tenant_id or tenant_query or str(user.library_id)).strip()
+    tenant_key = (x_tenant_slug or x_tenant_id or tenant_query or str(user.library_id)).strip()
 
     query = select(Library).where(Library.code == tenant_key)
     if tenant_key.isdigit():
