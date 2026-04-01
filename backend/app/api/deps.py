@@ -159,24 +159,48 @@ async def get_auth_context(
 async def get_current_user(
     request: Request,
     db: AsyncSession = Depends(get_db),
-    auth: AuthContext = Depends(get_auth_context),
 ):
     from app.models.user import User
 
-    tenant_slug = (request.headers.get("X-Tenant-Slug") or request.headers.get("X-Tenant-ID") or "").strip()
+    auth_header = request.headers.get("Authorization")
+    tenant_slug = (request.headers.get("X-Tenant-Slug") or "").strip()
+
+    if not auth_header or not auth_header.startswith("Bearer "):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token inválido")
+
+    token = auth_header.split(" ", 1)[1].strip()
+
+    try:
+        payload: TokenPayload = AuthService.decode_access_token(token)
+    except HTTPException:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token inválido") from None
+
+    user_id = payload.sub
+    tenant_from_token = payload.tenant
+
+    if not user_id or not tenant_slug:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Credenciais inválidas")
+
+    if tenant_from_token != tenant_slug:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Tenant inconsistente")
+
     user = (
         await db.execute(
             select(User)
             .join(Library, User.library_id == Library.id)
             .where(
-                User.id == auth.user_id,
-                User.library_id == auth.library_id,
+                User.id == user_id,
                 Library.code == tenant_slug,
             )
         )
     ).scalar_one_or_none()
 
-    if not user or not user.is_active:
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Usuário não pertence ao tenant",
+        )
+    if not user.is_active:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid authentication token")
     return user
 
