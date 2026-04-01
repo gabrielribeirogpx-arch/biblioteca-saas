@@ -24,7 +24,7 @@ async def list_copies(
     ctx: TenantScopedContext = Depends(get_tenant_context),
     auth: AuthContext = Depends(require_user),
 ) -> list[CopyOut]:
-    return await CopyService.list_copies(db, ctx.tenant.library_id)
+    return await CopyService.list_copies(db, ctx.tenant.library_id, auth.tenant_id)
 
 
 @router.post("/", response_model=CopyOut, dependencies=[Depends(get_current_user)])

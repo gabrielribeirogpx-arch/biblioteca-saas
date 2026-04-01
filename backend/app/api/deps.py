@@ -212,11 +212,9 @@ async def get_current_user(
     from app.models.user import User
 
     auth_header = request.headers.get("Authorization")
-    tenant_slug = (
-        request.headers.get("X-Tenant-Slug")
-        or request.headers.get("X-Tenant-ID")
-        or request.query_params.get("tenant")
-    )
+    header_tenant_slug = request.headers.get("X-Tenant-Slug")
+    header_tenant_id = request.headers.get("X-Tenant-ID")
+    tenant_slug = header_tenant_slug or header_tenant_id or request.query_params.get("tenant")
 
     if not auth_header:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing auth header")
@@ -248,6 +246,18 @@ async def get_current_user(
         user_id = int(user_id)
     except (TypeError, ValueError):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token subject") from None
+
+    if header_tenant_id:
+        normalized_header_tenant_id = header_tenant_id.strip()
+        if normalized_header_tenant_id:
+            if normalized_header_tenant_id.isdigit():
+                if int(normalized_header_tenant_id) != int(token_tenant_id):
+                    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Tenant mismatch")
+            elif token_tenant and normalized_header_tenant_id != str(token_tenant).strip():
+                raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Tenant mismatch")
+
+    if header_tenant_slug and token_tenant and header_tenant_slug.strip() != str(token_tenant).strip():
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Tenant mismatch")
 
     if tenant_slug:
         tenant_slug = tenant_slug.strip()

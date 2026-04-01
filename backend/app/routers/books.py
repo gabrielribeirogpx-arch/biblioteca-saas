@@ -38,7 +38,13 @@ async def list_books(
     ctx: TenantScopedContext = Depends(get_tenant_context),
     auth: AuthContext = Depends(require_user),
 ) -> BookListResponse:
-    return await BookService.list_books(db, ctx.tenant.library_id, page=page, page_size=page_size)
+    return await BookService.list_books(
+        db,
+        ctx.tenant.library_id,
+        auth.tenant_id,
+        page=page,
+        page_size=page_size,
+    )
 
 
 @router.post("/", response_model=BookOut, dependencies=[Depends(get_current_user)])
@@ -113,6 +119,7 @@ async def export_marc21(
     book, normalized_record, iso2709_base64 = await BookService.export_marc21_record(
         db=db,
         library_id=ctx.tenant.library_id,
+        tenant_id=auth.tenant_id,
         book_id=book_id,
     )
 
@@ -149,6 +156,7 @@ async def validate_aacr2(
     valid, errors, normalized_record = await BookService.validate_aacr2_record(
         db=db,
         library_id=ctx.tenant.library_id,
+        tenant_id=auth.tenant_id,
         record=payload.record,
         book_id=payload.book_id,
     )

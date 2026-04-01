@@ -288,15 +288,15 @@ class BookService:
         return BookService._to_schema(book)
 
     @staticmethod
-    async def list_books(db: AsyncSession, library_id: int, page: int = 1, page_size: int = 20) -> dict:
+    async def list_books(db: AsyncSession, library_id: int, tenant_id: int, page: int = 1, page_size: int = 20) -> dict:
         offset = (page - 1) * page_size
         table_columns = await BookService._get_books_table_columns(db)
         has_modern_columns = {"authors", "subjects", "marc21_record"}.issubset(table_columns)
 
         if not has_modern_columns:
             count_result = await db.execute(
-                text("SELECT COUNT(*) AS total FROM books WHERE library_id = :library_id"),
-                {"library_id": library_id},
+                text("SELECT COUNT(*) AS total FROM books WHERE library_id = :library_id AND tenant_id = :tenant_id"),
+                {"library_id": library_id, "tenant_id": tenant_id},
             )
             total = int(count_result.scalar() or 0)
 
@@ -321,6 +321,7 @@ class BookService:
                 SELECT {", ".join(select_parts)}
                 FROM books
                 WHERE library_id = :library_id
+                  AND tenant_id = :tenant_id
                 ORDER BY id ASC
                 OFFSET :offset
                 LIMIT :limit
@@ -329,7 +330,7 @@ class BookService:
             rows = (
                 await db.execute(
                     legacy_query,
-                    {"library_id": library_id, "offset": offset, "limit": page_size},
+                    {"library_id": library_id, "tenant_id": tenant_id, "offset": offset, "limit": page_size},
                 )
             ).mappings().all()
 
@@ -350,7 +351,9 @@ class BookService:
             ]
             return {"items": books, "page": page, "page_size": page_size, "total": total}
 
-        total = await db.scalar(select(func.count()).select_from(Book).where(Book.library_id == library_id))
+        total = await db.scalar(
+            select(func.count()).select_from(Book).where(Book.library_id == library_id, Book.tenant_id == tenant_id)
+        )
         result = await db.execute(
             select(
                 Book.id,
@@ -364,7 +367,7 @@ class BookService:
                 Book.subjects,
                 Book.marc21_record,
             )
-            .where(Book.library_id == library_id)
+            .where(Book.library_id == library_id, Book.tenant_id == tenant_id)
             .order_by(Book.id.asc())
             .offset(offset)
             .limit(page_size)
@@ -418,8 +421,8 @@ class BookService:
         return BookService._to_schema(book), normalized, encoded
 
     @staticmethod
-    async def export_marc21_record(db: AsyncSession, library_id: int, book_id: int) -> tuple[BookOut, dict, str]:
-        book = await BookService._get_book(db, library_id, book_id)
+    async def export_marc21_record(db: AsyncSession, library_id: int, tenant_id: int, book_id: int) -> tuple[BookOut, dict, str]:
+        book = await BookService._get_book(db, library_id, tenant_id, book_id)
         normalized = MARC21Service.normalize_record(book.marc21_record)
         book.marc21_record = normalized
         await db.commit()
@@ -430,6 +433,7 @@ class BookService:
     async def validate_aacr2_record(
         db: AsyncSession,
         library_id: int,
+        tenant_id: int,
         record: dict,
         book_id: int | None,
     ) -> tuple[bool, list[str], dict]:
@@ -437,7 +441,7 @@ class BookService:
         valid, errors = AACR2Validator.validate(normalized)
 
         if book_id is not None:
-            book = await BookService._get_book(db, library_id, book_id)
+            book = await BookService._get_book(db, library_id, tenant_id, book_id)
             book.marc21_record = normalized
             if valid:
                 mapped = MARC21Service.map_to_book_fields(normalized)
@@ -485,8 +489,10 @@ class BookService:
         return imported
 
     @staticmethod
-    async def _get_book(db: AsyncSession, library_id: int, book_id: int) -> Book:
-        result = await db.execute(select(Book).where(Book.id == book_id, Book.library_id == library_id))
+    async def _get_book(db: AsyncSession, library_id: int, tenant_id: int, book_id: int) -> Book:
+        result = await db.execute(
+            select(Book).where(Book.id == book_id, Book.library_id == library_id, Book.tenant_id == tenant_id)
+        )
         book = result.scalar_one_or_none()
         if not book:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Book not found")

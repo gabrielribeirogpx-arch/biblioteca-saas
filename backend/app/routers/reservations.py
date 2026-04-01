@@ -44,7 +44,13 @@ async def create_reservation(
     ctx: TenantScopedContext = Depends(get_tenant_context),
     auth: AuthContext = Depends(require_user),
 ) -> ReservationOut:
-    reservation = await ReservationService.create_reservation(db, ctx.tenant.library_id, auth.user_id, payload.copy_id)
+    reservation = await ReservationService.create_reservation(
+        db,
+        ctx.tenant.library_id,
+        auth.tenant_id,
+        auth.user_id,
+        payload.copy_id,
+    )
     await AuditService.log_event(
         db=db,
         library_id=ctx.tenant.library_id,
@@ -79,7 +85,12 @@ async def list_reservations(
     auth: AuthContext = Depends(require_user),
 ) -> ReservationListResponse:
     offset = (page - 1) * page_size
-    total = await db.scalar(select(func.count()).select_from(Reservation).where(Reservation.library_id == ctx.tenant.library_id))
+    total = await db.scalar(
+        select(func.count()).select_from(Reservation).where(
+            Reservation.library_id == ctx.tenant.library_id,
+            Reservation.tenant_id == auth.tenant_id,
+        )
+    )
     reservation_table = Reservation.__table__
     try:
         result = await db.execute(
@@ -92,7 +103,10 @@ async def list_reservations(
                 reservation_table.c.reserved_at,
                 reservation_table.c.expires_at,
             )
-            .where(reservation_table.c.library_id == ctx.tenant.library_id)
+            .where(
+                reservation_table.c.library_id == ctx.tenant.library_id,
+                reservation_table.c.tenant_id == auth.tenant_id,
+            )
             .order_by(
                 reservation_table.c.copy_id.asc(),
                 reservation_table.c.position.asc(),
@@ -120,7 +134,10 @@ async def list_reservations(
                 reservation_table.c.reserved_at,
                 reservation_table.c.expires_at,
             )
-            .where(reservation_table.c.library_id == ctx.tenant.library_id)
+            .where(
+                reservation_table.c.library_id == ctx.tenant.library_id,
+                reservation_table.c.tenant_id == auth.tenant_id,
+            )
             .order_by(
                 reservation_table.c.copy_id.asc(),
                 reservation_table.c.reserved_at.asc(),
@@ -156,6 +173,7 @@ async def cancel_reservation(
         await db.execute(
             select(Reservation).where(
                 Reservation.library_id == ctx.tenant.library_id,
+                Reservation.tenant_id == auth.tenant_id,
                 Reservation.id == reservation_id,
             )
         )
@@ -189,5 +207,5 @@ async def process_reservation_queue(
     ctx: TenantScopedContext = Depends(get_tenant_context),
     auth: AuthContext = Depends(require_librarian),
 ) -> MessageResponse:
-    processed = await ReservationService.process_queue(db, ctx.tenant.library_id)
+    processed = await ReservationService.process_queue(db, ctx.tenant.library_id, auth.tenant_id)
     return MessageResponse(message=f'Reservation queue processed: {processed} updates')

@@ -26,7 +26,7 @@ async def list_loans(
     ctx: TenantScopedContext = Depends(get_tenant_context),
     auth: AuthContext = Depends(require_user),
 ) -> LoanListResponse:
-    return await LoanService.list_loans(db, ctx.tenant.library_id, page=page, page_size=page_size)
+    return await LoanService.list_loans(db, ctx.tenant.library_id, auth.tenant_id, page=page, page_size=page_size)
 
 
 @router.post("/", response_model=LoanOut, dependencies=[Depends(get_current_user)])
@@ -37,7 +37,7 @@ async def create_loan(
     ctx: TenantScopedContext = Depends(get_tenant_context),
     auth: AuthContext = Depends(require_librarian),
 ) -> LoanOut:
-    created = await LoanService.create_loan(db, payload, ctx.tenant.library_id, ctx.user.id)
+    created = await LoanService.create_loan(db, payload, ctx.tenant.library_id, auth.tenant_id, ctx.user.id)
     await AuditService.log_event(
         db=db,
         library_id=ctx.tenant.library_id,
@@ -64,7 +64,7 @@ async def renew_loan(
     ctx: TenantScopedContext = Depends(get_tenant_context),
     auth: AuthContext = Depends(require_librarian),
 ) -> LoanOut:
-    renewed = await LoanService.renew_loan(db, ctx.tenant.library_id, loan_id, payload.renewal_days)
+    renewed = await LoanService.renew_loan(db, ctx.tenant.library_id, auth.tenant_id, loan_id, payload.renewal_days)
     await AuditService.log_event(
         db=db,
         library_id=ctx.tenant.library_id,
@@ -90,7 +90,7 @@ async def return_loan(
     ctx: TenantScopedContext = Depends(get_tenant_context),
     auth: AuthContext = Depends(require_librarian),
 ) -> LoanOut:
-    returned = await LoanService.return_loan(db, ctx.tenant.library_id, loan_id)
+    returned = await LoanService.return_loan(db, ctx.tenant.library_id, auth.tenant_id, loan_id)
     await AuditService.log_event(
         db=db,
         library_id=ctx.tenant.library_id,
