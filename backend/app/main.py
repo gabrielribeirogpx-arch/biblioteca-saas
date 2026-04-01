@@ -3,6 +3,7 @@ from contextlib import asynccontextmanager
 import json
 import logging
 from pathlib import Path
+import traceback
 from uuid import uuid4
 
 from alembic import command
@@ -70,6 +71,17 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
 
 
 app = FastAPI(lifespan=lifespan)
+
+
+@app.middleware("http")
+async def log_exceptions(request: Request, call_next):
+    try:
+        response = await call_next(request)
+        return response
+    except Exception as e:
+        print("🔥 ERRO NÃO TRATADO:")
+        traceback.print_exc()
+        raise e
 
 
 class RequestContextLoggingMiddleware(BaseHTTPMiddleware):
