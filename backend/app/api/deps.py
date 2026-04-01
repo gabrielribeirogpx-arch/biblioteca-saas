@@ -163,34 +163,43 @@ async def get_current_user(
     from app.models.user import User
 
     auth_header = request.headers.get("Authorization")
-    tenant_slug = (request.headers.get("X-Tenant-Slug") or "").strip()
+    tenant_slug = request.headers.get("X-Tenant-Slug")
 
     if not auth_header or not auth_header.startswith("Bearer "):
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token inválido")
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token ausente")
 
-    token = auth_header.split(" ", 1)[1].strip()
+    token = auth_header.split(" ")[1]
 
     try:
-        payload: TokenPayload = AuthService.decode_access_token(token)
-    except HTTPException:
+        decoded_payload: TokenPayload = AuthService.decode_access_token(token)
+        payload = decoded_payload.model_dump()
+    except Exception:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token inválido") from None
 
-    user_id = payload.sub
-    tenant_from_token = payload.tenant
+    user_id = payload.get("sub")
+    token_tenant = payload.get("tenant")
 
     if not user_id or not tenant_slug:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Credenciais inválidas")
 
-    if tenant_from_token != tenant_slug:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Tenant inconsistente")
+    if token_tenant != tenant_slug:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Tenant mismatch")
+
+    tenant = (
+        await db.execute(
+            select(Library).where(Library.code == tenant_slug)
+        )
+    ).scalar_one_or_none()
+
+    if not tenant:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Tenant não encontrado")
 
     user = (
         await db.execute(
             select(User)
-            .join(Library, User.library_id == Library.id)
             .where(
                 User.id == user_id,
-                Library.code == tenant_slug,
+                User.library_id == tenant.id,
             )
         )
     ).scalar_one_or_none()
