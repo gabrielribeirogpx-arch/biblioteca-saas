@@ -1,9 +1,10 @@
 from __future__ import annotations
 
+import json
 import re
 
 from fastapi import HTTPException, status
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.book import Book, BookCategory
@@ -13,6 +14,43 @@ from app.services.standards import AACR2Validator, ISO2709Codec, MARC21Service, 
 
 
 class BookService:
+    @staticmethod
+    async def _get_books_table_columns(db: AsyncSession) -> set[str]:
+        result = await db.execute(
+            text(
+                """
+                SELECT column_name
+                FROM information_schema.columns
+                WHERE table_schema = current_schema()
+                  AND table_name = 'books'
+                """
+            )
+        )
+        return {str(name) for name in result.scalars().all()}
+
+    @staticmethod
+    def _normalize_authors_from_legacy(value: object) -> list[str]:
+        normalized = BookService._normalize_string_list(value)
+        if normalized:
+            return normalized
+        if isinstance(value, str):
+            split_authors = [part.strip() for part in value.split("|")]
+            return [author for author in split_authors if author]
+        return []
+
+    @staticmethod
+    def _normalize_marc21_record_legacy(value: object) -> dict:
+        if isinstance(value, str):
+            stripped = value.strip()
+            if not stripped:
+                return {}
+            try:
+                parsed = json.loads(stripped)
+            except json.JSONDecodeError:
+                return {"legacy_payload": stripped}
+            return BookService._normalize_marc21_record(parsed)
+        return BookService._normalize_marc21_record(value)
+
     @staticmethod
     def _normalize_string_list(value: object) -> list[str]:
         if value is None:
@@ -242,6 +280,66 @@ class BookService:
     @staticmethod
     async def list_books(db: AsyncSession, library_id: int, page: int = 1, page_size: int = 20) -> dict:
         offset = (page - 1) * page_size
+        table_columns = await BookService._get_books_table_columns(db)
+        has_modern_columns = {"authors", "subjects", "marc21_record"}.issubset(table_columns)
+
+        if not has_modern_columns:
+            count_result = await db.execute(
+                text("SELECT COUNT(*) AS total FROM books WHERE library_id = :library_id"),
+                {"library_id": library_id},
+            )
+            total = int(count_result.scalar() or 0)
+
+            marc_column = "marc21_record" if "marc21_record" in table_columns else "marc_record" if "marc_record" in table_columns else None
+            author_column = "author" if "author" in table_columns else None
+
+            select_parts = [
+                "id",
+                "library_id",
+                "title",
+                "subtitle" if "subtitle" in table_columns else "NULL AS subtitle",
+                "isbn" if "isbn" in table_columns else "NULL AS isbn",
+                "edition" if "edition" in table_columns else "NULL AS edition",
+                "publication_year" if "publication_year" in table_columns else "NULL AS publication_year",
+                "authors" if "authors" in table_columns else f"{author_column} AS authors" if author_column else "NULL AS authors",
+                "subjects" if "subjects" in table_columns else "NULL AS subjects",
+                marc_column if marc_column else "NULL AS marc21_record",
+            ]
+
+            legacy_query = text(
+                f"""
+                SELECT {", ".join(select_parts)}
+                FROM books
+                WHERE library_id = :library_id
+                ORDER BY id ASC
+                OFFSET :offset
+                LIMIT :limit
+                """
+            )
+            rows = (
+                await db.execute(
+                    legacy_query,
+                    {"library_id": library_id, "offset": offset, "limit": page_size},
+                )
+            ).mappings().all()
+
+            books = [
+                BookOut(
+                    id=row["id"],
+                    library_id=row["library_id"],
+                    title=row["title"],
+                    subtitle=row["subtitle"],
+                    isbn=row["isbn"],
+                    edition=row["edition"],
+                    publication_year=row["publication_year"],
+                    authors=BookService._normalize_authors_from_legacy(row["authors"]),
+                    subjects=BookService._normalize_string_list(row["subjects"]),
+                    marc21_record=BookService._normalize_marc21_record_legacy(row.get("marc21_record") or row.get("marc_record")),
+                )
+                for row in rows
+            ]
+            return {"items": books, "page": page, "page_size": page_size, "total": total}
+
         total = await db.scalar(select(func.count()).select_from(Book).where(Book.library_id == library_id))
         result = await db.execute(
             select(
