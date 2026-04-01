@@ -10,6 +10,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.library import Library
+from app.models.organization import Organization
 from app.models.user import User, UserRole
 from app.schemas.auth import RegisterRequest, RegisterResponse, TokenPayload
 from app.schemas.tenants import TenantCreate
@@ -17,6 +18,8 @@ from app.services.auth_service import AuthService
 
 
 DEFAULT_TENANT_CODE = "default"
+DEFAULT_ORGANIZATION_NAME = "Default Organization"
+DEFAULT_ORGANIZATION_SLUG = "default"
 PASSWORD_SPECIAL_CHARS = "!@#$%^&*()_+-=[]{}|;:,.<>?"
 logger = logging.getLogger(__name__)
 
@@ -61,12 +64,32 @@ class TenantService:
         return existing is None
 
     @staticmethod
+    async def seed_default_organization(db: AsyncSession) -> Organization:
+        existing = (
+            await db.execute(select(Organization).where(Organization.slug == DEFAULT_ORGANIZATION_SLUG))
+        ).scalar_one_or_none()
+        if existing:
+            return existing
+
+        organization = Organization(name=DEFAULT_ORGANIZATION_NAME, slug=DEFAULT_ORGANIZATION_SLUG)
+        db.add(organization)
+        await db.commit()
+        await db.refresh(organization)
+        return organization
+
+    @staticmethod
     async def seed_default_tenant(db: AsyncSession) -> Library:
+        default_organization = await TenantService.seed_default_organization(db)
         existing = (await db.execute(select(Library).where(Library.code == DEFAULT_TENANT_CODE))).scalar_one_or_none()
         if existing:
             return existing
 
-        tenant = Library(name="Default", code=DEFAULT_TENANT_CODE, timezone="UTC")
+        tenant = Library(
+            name="Default",
+            code=DEFAULT_TENANT_CODE,
+            timezone="UTC",
+            organization_id=default_organization.id,
+        )
         db.add(tenant)
         await db.commit()
         await db.refresh(tenant)
@@ -98,6 +121,7 @@ class TenantService:
 
     @staticmethod
     async def create_tenant(db: AsyncSession, payload: TenantCreate) -> Library:
+        default_organization = await TenantService.seed_default_organization(db)
         slug = TenantService.normalize_slug(payload.slug)
         name = TenantService.sanitize_name(payload.name)
         if not slug or not name:
@@ -107,7 +131,7 @@ class TenantService:
         if existing:
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Tenant slug already exists")
 
-        tenant = Library(name=name, code=slug, timezone="UTC")
+        tenant = Library(name=name, code=slug, timezone="UTC", organization_id=default_organization.id)
         db.add(tenant)
         await db.commit()
         await db.refresh(tenant)
@@ -115,6 +139,7 @@ class TenantService:
 
     @staticmethod
     async def register_tenant_admin(db: AsyncSession, payload: RegisterRequest) -> RegisterResponse:
+        default_organization = await TenantService.seed_default_organization(db)
         tenant_name = TenantService.sanitize_name(payload.name)
         tenant_slug = TenantService.normalize_slug(payload.slug)
         email = TenantService.normalize_email(payload.email)
@@ -130,7 +155,12 @@ class TenantService:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Slug already exists")
 
         try:
-            tenant = Library(name=tenant_name, code=tenant_slug, timezone="UTC")
+            tenant = Library(
+                name=tenant_name,
+                code=tenant_slug,
+                timezone="UTC",
+                organization_id=default_organization.id,
+            )
             db.add(tenant)
             await db.flush()
 
@@ -158,6 +188,7 @@ class TenantService:
                     role=admin_user.role,
                     library_id=tenant.id,
                     tenant=tenant.code,
+                    organization_id=tenant.organization_id,
                 )
             )
             return RegisterResponse(success=True, tenant_slug=tenant_slug, token=token)

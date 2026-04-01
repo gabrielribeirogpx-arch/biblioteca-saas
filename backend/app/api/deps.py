@@ -13,6 +13,7 @@ from app.core.config import settings
 from app.db.session import AsyncSessionLocal
 from app.models.audit_log import AuditActorType, AuditCategory
 from app.models.library import Library
+from app.models.organization import Organization
 from app.models.user import UserRole
 from app.schemas.auth import TokenPayload
 from app.services.audit_service import AuditService
@@ -25,6 +26,8 @@ DEFAULT_TENANT_CODE = "default"
 @dataclass(slots=True)
 class TenantContext:
     tenant_id: str
+    organization_id: int
+    organization_slug: str
     library_id: int
     library_code: str
 
@@ -34,6 +37,29 @@ class AuthContext:
     user_id: int
     role: UserRole
     library_id: int
+    organization_id: int | None
+
+
+async def _resolve_library_from_tenant_key(db: AsyncSession, tenant_key: str) -> Library | None:
+    query = select(Library).where(Library.code == tenant_key)
+    if tenant_key.isdigit():
+        query = select(Library).where((Library.code == tenant_key) | (Library.id == int(tenant_key)))
+
+    library = (await db.execute(query)).scalar_one_or_none()
+    if library:
+        return library
+
+    organization = (await db.execute(select(Organization).where(Organization.slug == tenant_key))).scalar_one_or_none()
+    if not organization:
+        return None
+
+    return (
+        await db.execute(
+            select(Library)
+            .where(Library.organization_id == organization.id)
+            .order_by(Library.id.asc())
+        )
+    ).scalars().first()
 
 
 @dataclass(slots=True)
@@ -88,21 +114,17 @@ async def resolve_tenant(
         or DEFAULT_TENANT_CODE
     ).strip()
 
-    query = select(Library).where(Library.code == tenant_key)
-    if tenant_key.isdigit():
-        query = select(Library).where((Library.code == tenant_key) | (Library.id == int(tenant_key)))
-
-    library = (await db.execute(query)).scalar_one_or_none()
+    library = await _resolve_library_from_tenant_key(db, tenant_key)
     if not library and tenant_key != DEFAULT_TENANT_CODE:
-        library = (
-            await db.execute(select(Library).where(Library.code == DEFAULT_TENANT_CODE))
-        ).scalar_one_or_none()
+        library = await _resolve_library_from_tenant_key(db, DEFAULT_TENANT_CODE)
 
     if not library:
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Default tenant is unavailable")
 
     tenant_context = TenantContext(
         tenant_id=library.code,
+        organization_id=library.organization_id,
+        organization_slug=library.organization.slug,
         library_id=library.id,
         library_code=library.code,
     )
@@ -123,11 +145,7 @@ async def get_tenant_from_request(request: Request, db: AsyncSession) -> Library
     if not tenant_key:
         return None
 
-    query = select(Library).where(Library.code == tenant_key)
-    if tenant_key.isdigit():
-        query = select(Library).where((Library.code == tenant_key) | (Library.id == int(tenant_key)))
-
-    return (await db.execute(query)).scalar_one_or_none()
+    return await _resolve_library_from_tenant_key(db, tenant_key)
 
 
 _bearer = HTTPBearer(auto_error=False)
@@ -153,6 +171,7 @@ async def get_auth_context(
         user_id=payload.sub,
         role=payload.role,
         library_id=payload.library_id,
+        organization_id=payload.organization_id,
     )
     request.state.auth_context = auth_context
     return auth_context
@@ -208,11 +227,7 @@ async def get_current_user(
     if token_tenant and str(token_tenant).strip() != tenant_slug:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Tenant mismatch")
 
-    tenant = (
-        await db.execute(
-            select(Library).where(Library.code == tenant_slug)
-        )
-    ).scalar_one_or_none()
+    tenant = await _resolve_library_from_tenant_key(db, tenant_slug)
 
     if not tenant:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Tenant não encontrado")
@@ -244,16 +259,14 @@ async def get_current_tenant(
     tenant_query = request.query_params.get("tenant")
     tenant_key = (x_tenant_slug or x_tenant_id or tenant_query or str(user.library_id)).strip()
 
-    query = select(Library).where(Library.code == tenant_key)
-    if tenant_key.isdigit():
-        query = select(Library).where((Library.code == tenant_key) | (Library.id == int(tenant_key)))
-
-    library = (await db.execute(query)).scalar_one_or_none()
+    library = await _resolve_library_from_tenant_key(db, tenant_key)
     if not library:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tenant not found")
 
     tenant_context = TenantContext(
-        tenant_id=library.code,
+        tenant_id=library.organization.slug,
+        organization_id=library.organization_id,
+        organization_slug=library.organization.slug,
         library_id=library.id,
         library_code=library.code,
     )
@@ -281,6 +294,7 @@ def role_guard(*allowed_roles: UserRole) -> Callable[..., AuthContext]:
             if tenant is not None:
                 await AuditService.log_event(
                     db=db,
+                    organization_id=tenant.organization_id,
                     library_id=tenant.library_id,
                     category=AuditCategory.SECURITY,
                     actor_type=AuditActorType.USER,

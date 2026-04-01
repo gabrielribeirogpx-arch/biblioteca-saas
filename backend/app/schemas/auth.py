@@ -14,6 +14,7 @@ class TokenPayload(BaseModel):
     role: UserRole
     library_id: int
     tenant: str
+    organization_id: int | None = None
 
 
 class TokenResponse(BaseModel):

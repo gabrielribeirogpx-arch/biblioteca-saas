@@ -17,12 +17,14 @@ class AuditService:
         entity_type: str,
         entity_id: str,
         summary: str,
+        organization_id: int | None = None,
         payload: dict | None = None,
         request_id: str | None = None,
         ip_address: str | None = None,
     ) -> None:
         event = AuditLog(
             library_id=library_id,
+            organization_id=organization_id,
             category=category,
             actor_type=actor_type,
             actor_id=actor_id,

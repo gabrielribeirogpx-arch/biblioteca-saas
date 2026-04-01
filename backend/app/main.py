@@ -44,6 +44,8 @@ class RequestContextLoggingMiddleware(BaseHTTPMiddleware):
                     {
                         "request_id": request_id,
                         "tenant_id": getattr(tenant_context, "library_id", None),
+                        "organization_id": getattr(tenant_context, "organization_id", None),
+                        "library_id": getattr(tenant_context, "library_id", None),
                         "user_id": getattr(auth_context, "user_id", None),
                         "endpoint": f"{request.method} {request.url.path}",
                         "status_code": 500,
@@ -59,6 +61,8 @@ class RequestContextLoggingMiddleware(BaseHTTPMiddleware):
                     {
                         "request_id": request_id,
                         "tenant_id": getattr(tenant_context, "library_id", None),
+                        "organization_id": getattr(tenant_context, "organization_id", None),
+                        "library_id": getattr(tenant_context, "library_id", None),
                         "user_id": getattr(auth_context, "user_id", None),
                         "endpoint": f"{request.method} {request.url.path}",
                         "status_code": response.status_code,
