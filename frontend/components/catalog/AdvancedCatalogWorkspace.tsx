@@ -2,7 +2,7 @@
 
 import { FormEvent, KeyboardEvent, useEffect, useMemo, useRef, useState } from 'react';
 
-import { apiFetch, type Book } from '../../lib/api';
+import { ApiError, apiFetch, type Book } from '../../lib/api';
 
 interface AdvancedCatalogPayload {
   title: string;
@@ -69,6 +69,11 @@ interface MarcHumanToken {
 interface MarcHumanLine {
   id: string;
   tokens: MarcHumanToken[];
+}
+
+interface MarcValidationResult {
+  errors: string[];
+  fieldErrors: Record<string, string[]>;
 }
 
 const EMPTY_FORM: FormState = {
@@ -195,12 +200,70 @@ function formatMarcHuman(marc21Full: Record<string, unknown>): MarcHumanLine[] {
   });
 }
 
+function validateMarc(marc21_full: Record<string, unknown>): MarcValidationResult {
+  const fieldErrors: Record<string, string[]> = {};
+  const isbnRegex = /^(?:\d{9}[\dXx]|\d{13})$/;
+  const pushError = (key: string, message: string) => {
+    fieldErrors[key] = [...(fieldErrors[key] ?? []), message];
+  };
+
+  const getField = (tag: string): MarcPreviewField | null => {
+    const raw = marc21_full[tag];
+    if (!raw || typeof raw !== 'object') {
+      return null;
+    }
+    return raw as MarcPreviewField;
+  };
+
+  const readSubfieldValue = (tag: string, code: string): string => {
+    const field = getField(tag);
+    const raw = field?.subfields?.[code];
+    return typeof raw === 'string' ? raw.trim() : String(raw ?? '').trim();
+  };
+
+  const title = readSubfieldValue('245', 'a');
+  if (!title) {
+    pushError('245', 'Campo 245 (Título) é obrigatório');
+  }
+
+  const author = readSubfieldValue('100', 'a');
+  if (!author) {
+    pushError('100', 'Campo 100 deve conter autor');
+  }
+
+  const isbn = readSubfieldValue('020', 'a').replace(/[-\s]/g, '');
+  if (isbn && !isbnRegex.test(isbn)) {
+    pushError('020$a', 'ISBN inválido');
+  }
+
+  const yearValue = readSubfieldValue('260', 'c');
+  if (yearValue && !/^\d{4}$/.test(yearValue)) {
+    pushError('260$c', 'Ano deve ser número válido');
+  }
+
+  Object.entries(marc21_full).forEach(([tag, value]) => {
+    if (!/^\d{3}$/.test(tag) || typeof value !== 'object' || value === null) {
+      return;
+    }
+    const subfields = (value as MarcPreviewField).subfields;
+    const validSubfields = subfields && typeof subfields === 'object'
+      ? Object.entries(subfields).filter(([code]) => code.trim()).filter(([, subValue]) => String(subValue ?? '').trim())
+      : [];
+    if (validSubfields.length === 0) {
+      pushError(tag, `Campo ${tag} deve conter pelo menos 1 subcampo`);
+    }
+  });
+
+  return { errors: Object.values(fieldErrors).flat(), fieldErrors };
+}
+
 export function AdvancedCatalogWorkspace() {
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [marcRows, setMarcRows] = useState<MarcRow[]>(() => buildRowsFromForm(EMPTY_FORM));
   const [saving, setSaving] = useState(false);
   const [loadingLookup, setLoadingLookup] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
+  const [validationErrors, setValidationErrors] = useState<Record<string, string[]>>({});
   const syncingFromRowsRef = useRef(false);
 
   useEffect(() => {
@@ -304,6 +367,13 @@ export function AdvancedCatalogWorkspace() {
 
   const onSave = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    const validation = validateMarc(preview);
+    setValidationErrors(validation.fieldErrors);
+    if (validation.errors.length > 0) {
+      setToast(`Erros de validação: ${validation.errors.join(' | ')}`);
+      return;
+    }
+
     setSaving(true);
     setToast(null);
 
@@ -320,7 +390,20 @@ export function AdvancedCatalogWorkspace() {
       setToast(`Livro salvo com sucesso! Registro #${response.book.id}.`);
       setForm(EMPTY_FORM);
     } catch (error) {
-      setToast(error instanceof Error ? error.message : 'Falha ao salvar o livro.');
+      if (error instanceof ApiError) {
+        try {
+          const parsed = JSON.parse(error.body) as { detail?: { errors?: string[] } | string };
+          if (typeof parsed.detail === 'object' && parsed.detail?.errors?.length) {
+            setToast(`Erros de validação: ${parsed.detail.errors.join(' | ')}`);
+          } else {
+            setToast('Falha ao salvar o livro.');
+          }
+        } catch {
+          setToast(error.message);
+        }
+      } else {
+        setToast(error instanceof Error ? error.message : 'Falha ao salvar o livro.');
+      }
     } finally {
       setSaving(false);
     }
@@ -381,9 +464,16 @@ export function AdvancedCatalogWorkspace() {
       <form className="space-y-4 rounded-xl border bg-white p-5 shadow-sm" onSubmit={onSave}>
         <h3 className="text-lg font-semibold text-slate-900">Formulário bibliográfico avançado</h3>
         <div className="grid gap-4 md:grid-cols-2">
-          <Field label="Título" required value={form.title} onChange={(value) => setForm((s) => ({ ...s, title: value }))} />
+          <Field
+            error={validationErrors['245']?.[0]}
+            label="Título"
+            required
+            value={form.title}
+            onChange={(value) => setForm((s) => ({ ...s, title: value }))}
+          />
           <Field label="Subtítulo" value={form.subtitle} onChange={(value) => setForm((s) => ({ ...s, subtitle: value }))} />
           <TagField
+            error={validationErrors['100']?.[0]}
             label="Autor(es)"
             inputValue={form.authorInput}
             tags={form.authors}
@@ -401,9 +491,9 @@ export function AdvancedCatalogWorkspace() {
             onAdd={() => addTag('subjects', form.subjectInput)}
             onRemove={(value) => removeTag('subjects', value)}
           />
-          <Field label="ISBN" value={form.isbn} onChange={(value) => setForm((s) => ({ ...s, isbn: value }))} />
+          <Field error={validationErrors['020$a']?.[0]} label="ISBN" value={form.isbn} onChange={(value) => setForm((s) => ({ ...s, isbn: value }))} />
           <Field label="Editora" value={form.publisher} onChange={(value) => setForm((s) => ({ ...s, publisher: value }))} />
-          <Field label="Ano" type="number" value={form.publicationYear} onChange={(value) => setForm((s) => ({ ...s, publicationYear: value }))} />
+          <Field error={validationErrors['260$c']?.[0]} label="Ano" type="number" value={form.publicationYear} onChange={(value) => setForm((s) => ({ ...s, publicationYear: value }))} />
           <Field label="Edição" value={form.edition} onChange={(value) => setForm((s) => ({ ...s, edition: value }))} />
           <Field label="Idioma" value={form.language} onChange={(value) => setForm((s) => ({ ...s, language: value }))} />
           <Field label="Número de páginas" type="number" value={form.pages} onChange={(value) => setForm((s) => ({ ...s, pages: value }))} />
@@ -451,15 +541,16 @@ export function AdvancedCatalogWorkspace() {
                   <th className="px-3 py-2">Campo</th>
                   <th className="px-3 py-2">Indicadores</th>
                   <th className="px-3 py-2">Subcampos</th>
-                  <th className="px-3 py-2" />
+                  <th className="px-3 py-2">Ações</th>
+                  <th className="px-3 py-2">Erros</th>
                 </tr>
               </thead>
               <tbody>
                 {marcRows.map((row) => (
-                  <tr className="border-t border-slate-100 align-top" key={row.id}>
+                  <tr className={`border-t align-top ${validationErrors[row.tag.trim()] ? 'border-red-200 bg-red-50/40' : 'border-slate-100'}`} key={row.id}>
                     <td className="px-3 py-2">
                       <input
-                        className="w-20 rounded-md border border-emerald-200 bg-emerald-50 px-2 py-1 font-mono text-emerald-900"
+                        className={`w-20 rounded-md px-2 py-1 font-mono ${validationErrors[row.tag.trim()] ? 'border-red-300 bg-red-50 text-red-900' : 'border-emerald-200 bg-emerald-50 text-emerald-900'}`}
                         maxLength={3}
                         onChange={(event) => setMarcRows((current) => current.map((item) => item.id === row.id ? { ...item, tag: event.target.value } : item))}
                         value={row.tag}
@@ -534,6 +625,9 @@ export function AdvancedCatalogWorkspace() {
                         </button>
                       </div>
                     </td>
+                    <td className="px-3 py-2 text-xs text-red-600">
+                      {validationErrors[row.tag.trim()]?.join(' | ')}
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -607,19 +701,21 @@ interface FieldProps {
   onChange: (value: string) => void;
   required?: boolean;
   type?: 'text' | 'number';
+  error?: string;
 }
 
-function Field({ label, value, onChange, required, type = 'text' }: FieldProps) {
+function Field({ label, value, onChange, required, type = 'text', error }: FieldProps) {
   return (
     <label className="block text-sm font-medium text-slate-700">
       {label}
       <input
-        className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm shadow-sm focus:border-brand-400 focus:outline-none"
+        className={`mt-1 w-full rounded-lg border px-3 py-2 text-sm shadow-sm focus:outline-none ${error ? 'border-red-300 focus:border-red-400' : 'border-slate-200 focus:border-brand-400'}`}
         onChange={(event) => onChange(event.target.value)}
         required={required}
         type={type}
         value={value}
       />
+      {error ? <span className="mt-1 block text-xs text-red-600">{error}</span> : null}
     </label>
   );
 }
@@ -632,21 +728,23 @@ interface TagFieldProps {
   onKeyDown: (event: KeyboardEvent<HTMLInputElement>) => void;
   onAdd: () => void;
   onRemove: (value: string) => void;
+  error?: string;
 }
 
-function TagField({ label, tags, inputValue, onInputChange, onKeyDown, onAdd, onRemove }: TagFieldProps) {
+function TagField({ label, tags, inputValue, onInputChange, onKeyDown, onAdd, onRemove, error }: TagFieldProps) {
   return (
     <label className="block text-sm font-medium text-slate-700">
       {label}
       <div className="mt-1 flex gap-2">
         <input
-          className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm shadow-sm focus:border-brand-400 focus:outline-none"
+          className={`w-full rounded-lg border px-3 py-2 text-sm shadow-sm focus:outline-none ${error ? 'border-red-300 focus:border-red-400' : 'border-slate-200 focus:border-brand-400'}`}
           onChange={(event) => onInputChange(event.target.value)}
           onKeyDown={onKeyDown}
           value={inputValue}
         />
         <button className="rounded-lg border border-slate-300 px-3 text-sm" onClick={onAdd} type="button">+</button>
       </div>
+      {error ? <span className="mt-1 block text-xs text-red-600">{error}</span> : null}
       <div className="mt-2 flex flex-wrap gap-2">
         {tags.map((tag) => (
           <button className="rounded-full bg-brand-50 px-3 py-1 text-xs text-brand-800" key={tag} onClick={() => onRemove(tag)} type="button">

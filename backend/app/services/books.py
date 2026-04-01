@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import re
+
 from fastapi import HTTPException, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -10,6 +12,51 @@ from app.services.standards import AACR2Validator, ISO2709Codec, MARC21Service, 
 
 
 class BookService:
+    @staticmethod
+    def _extract_subfield_value(record: dict, tag: str, code: str) -> str:
+        field = record.get(tag)
+        if isinstance(field, dict):
+            subfields = field.get("subfields")
+            if isinstance(subfields, dict):
+                value = subfields.get(code, "")
+                return str(value).strip()
+            return ""
+        return str(field).strip() if field is not None else ""
+
+    @staticmethod
+    def _validate_advanced_marc_record(record: dict, publication_year: int | None = None) -> list[str]:
+        errors: list[str] = []
+
+        title = BookService._extract_subfield_value(record, "245", "a")
+        if not title:
+            errors.append("Campo 245 (Título) é obrigatório")
+
+        author = BookService._extract_subfield_value(record, "100", "a")
+        if not author:
+            errors.append("Campo 100 deve conter autor")
+
+        isbn_raw = BookService._extract_subfield_value(record, "020", "a").replace("-", "").replace(" ", "")
+        if isbn_raw and not re.fullmatch(r"(?:\d{9}[\dXx]|\d{13})", isbn_raw):
+            errors.append("ISBN inválido")
+
+        year_raw = BookService._extract_subfield_value(record, "260", "c")
+        if publication_year is not None and publication_year < 0:
+            errors.append("Ano deve ser número válido")
+        if year_raw and not year_raw.isdigit():
+            errors.append("Ano deve ser número válido")
+
+        for tag, field in record.items():
+            if not (isinstance(tag, str) and tag.isdigit() and len(tag) == 3):
+                continue
+            if isinstance(field, dict):
+                subfields = field.get("subfields")
+                if not isinstance(subfields, dict) or not any(
+                    str(code).strip() and str(value).strip() for code, value in subfields.items()
+                ):
+                    errors.append(f"Campo {tag} deve conter pelo menos 1 subcampo")
+
+        return errors
+
     @staticmethod
     def build_simplified_marc21_record(
         *,
@@ -72,6 +119,13 @@ class BookService:
             language=payload.language.strip() if payload.language else None,
             description=payload.description.strip() if payload.description else None,
         )
+        if isinstance(marc21_record, dict):
+            validation_errors = BookService._validate_advanced_marc_record(
+                marc21_record,
+                publication_year=payload.publication_year,
+            )
+            if validation_errors:
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail={"errors": validation_errors})
 
         book = Book(
             library_id=library_id,
