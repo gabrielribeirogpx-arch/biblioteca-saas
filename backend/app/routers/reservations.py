@@ -13,8 +13,13 @@ from app.services.reservation_service import ReservationService
 router = APIRouter()
 
 
-def _normalize_reservation_status(raw_status: str) -> str:
-    normalized = raw_status.lower()
+def _normalize_reservation_status(raw_status: str | ReservationStatus | None) -> str:
+    if raw_status is None:
+        return ReservationStatus.WAITING.value
+    if isinstance(raw_status, ReservationStatus):
+        normalized = raw_status.value.lower()
+    else:
+        normalized = str(raw_status).lower()
     legacy_status_map = {
         "queued": ReservationStatus.WAITING.value,
         "canceled": ReservationStatus.CANCELLED.value,
