@@ -74,12 +74,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const sanitizedPassword = password;
     let data: { access_token?: string } | null = null;
     try {
-      data = await apiFetch<{ access_token?: string }>(`/api/v1/auth/login?tenant=${encodeURIComponent(resolvedTenantId)}`, {
+      data = await apiFetch<{ access_token?: string }>('/api/v1/auth/login', {
         method: 'POST',
         headers: {
+          'Content-Type': 'application/json',
           'X-Tenant-ID': resolvedTenantId
         },
-        body: JSON.stringify({ email: sanitizedEmail, password: sanitizedPassword })
+        body: JSON.stringify({ email: sanitizedEmail, password: sanitizedPassword, tenant: resolvedTenantId })
       });
     } catch {
       throw new Error('Credenciais inválidas');
