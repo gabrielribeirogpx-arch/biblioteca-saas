@@ -6,7 +6,7 @@ import unicodedata
 
 from fastapi import HTTPException, status
 from sqlalchemy import select
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.library import Library
@@ -64,10 +64,15 @@ class TenantService:
         return existing is None
 
     @staticmethod
-    async def seed_default_organization(db: AsyncSession) -> Organization:
-        existing = (
-            await db.execute(select(Organization).where(Organization.slug == DEFAULT_ORGANIZATION_SLUG))
-        ).scalar_one_or_none()
+    async def seed_default_organization(db: AsyncSession) -> Organization | None:
+        try:
+            existing = (
+                await db.execute(select(Organization).where(Organization.slug == DEFAULT_ORGANIZATION_SLUG))
+            ).scalar_one_or_none()
+        except SQLAlchemyError:
+            logger.warning("Skipping default organization seed because organizations table is not available yet")
+            await db.rollback()
+            return None
         if existing:
             return existing
 
@@ -80,6 +85,8 @@ class TenantService:
     @staticmethod
     async def seed_default_tenant(db: AsyncSession) -> Library:
         default_organization = await TenantService.seed_default_organization(db)
+        if default_organization is None:
+            raise RuntimeError("Default organization is not available")
         existing = (await db.execute(select(Library).where(Library.code == DEFAULT_TENANT_CODE))).scalar_one_or_none()
         if existing:
             return existing
@@ -122,6 +129,11 @@ class TenantService:
     @staticmethod
     async def create_tenant(db: AsyncSession, payload: TenantCreate) -> Library:
         default_organization = await TenantService.seed_default_organization(db)
+        if default_organization is None:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Organization table is not available. Run database migrations and retry.",
+            )
         slug = TenantService.normalize_slug(payload.slug)
         name = TenantService.sanitize_name(payload.name)
         if not slug or not name:
@@ -140,6 +152,11 @@ class TenantService:
     @staticmethod
     async def register_tenant_admin(db: AsyncSession, payload: RegisterRequest) -> RegisterResponse:
         default_organization = await TenantService.seed_default_organization(db)
+        if default_organization is None:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Organization table is not available. Run database migrations and retry.",
+            )
         tenant_name = TenantService.sanitize_name(payload.name)
         tenant_slug = TenantService.normalize_slug(payload.slug)
         email = TenantService.normalize_email(payload.email)
