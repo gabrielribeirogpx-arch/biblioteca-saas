@@ -18,7 +18,7 @@ class Library(Base):
         ForeignKey("organizations.id", ondelete="RESTRICT"), nullable=False, index=True
     )
     name: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
-    code: Mapped[str] = mapped_column(String(64), nullable=False, unique=True, index=True)
+    code: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
     timezone: Mapped[str] = mapped_column(String(64), nullable=False, default="UTC")
 
     created_at: Mapped[DateTime] = mapped_column(

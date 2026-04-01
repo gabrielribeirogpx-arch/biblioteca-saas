@@ -77,9 +77,18 @@ export function UserMenu() {
     }
 
     loadLibraries();
+    const handleLibrariesUpdated = () => {
+      void loadLibraries();
+    };
+    if (typeof window !== 'undefined') {
+      window.addEventListener('libraries:updated', handleLibrariesUpdated);
+    }
 
     return () => {
       isMounted = false;
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('libraries:updated', handleLibrariesUpdated);
+      }
     };
   }, [isAuthenticated, libraryId, setLibraryId]);
 

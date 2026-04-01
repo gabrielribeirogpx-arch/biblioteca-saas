@@ -6,3 +6,8 @@ class LibraryListItem(BaseModel):
     code: str
     name: str
     organization_id: int
+
+
+class LibraryCreate(BaseModel):
+    name: str
+    code: str
