@@ -6,6 +6,7 @@ from app.models.campus import Campus
 from app.models.copy import Copy, CopyStatus
 from app.models.fine import Fine, FineStatus
 from app.models.library import Library
+from app.models.library_policy import LibraryPolicy
 from app.models.loan import Loan, LoanStatus
 from app.models.organization import Organization
 from app.models.reservation import Reservation, ReservationStatus
@@ -29,6 +30,7 @@ __all__ = [
     "Fine",
     "FineStatus",
     "Library",
+    "LibraryPolicy",
     "Loan",
     "LoanStatus",
     "Organization",
