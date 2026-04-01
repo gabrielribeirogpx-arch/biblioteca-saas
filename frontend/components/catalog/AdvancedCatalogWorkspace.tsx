@@ -1,6 +1,6 @@
 'use client';
 
-import { FormEvent, KeyboardEvent, useMemo, useState } from 'react';
+import { FormEvent, KeyboardEvent, useEffect, useMemo, useRef, useState } from 'react';
 
 import { apiFetch, type Book } from '../../lib/api';
 
@@ -16,6 +16,7 @@ interface AdvancedCatalogPayload {
   language?: string;
   pages?: number;
   description?: string;
+  marc21_full?: Record<string, unknown>;
 }
 
 interface AdvancedCatalogResponse {
@@ -41,6 +42,19 @@ interface FormState {
   description: string;
 }
 
+interface MarcSubfield {
+  id: string;
+  code: string;
+  value: string;
+}
+
+interface MarcRow {
+  id: string;
+  tag: string;
+  indicators: string;
+  subfields: MarcSubfield[];
+}
+
 const EMPTY_FORM: FormState = {
   title: '',
   subtitle: '',
@@ -59,29 +73,109 @@ const EMPTY_FORM: FormState = {
 
 const MARC_HIGHLIGHT_TAGS = ['001', '100', '245', '260', '300', '650', '020'];
 
+const createId = () => `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+
+const createSubfield = (code = 'a', value = ''): MarcSubfield => ({ id: createId(), code, value });
+
+const createRow = (tag = '', indicators = '##', subfields: MarcSubfield[] = [createSubfield()]): MarcRow => ({
+  id: createId(),
+  tag,
+  indicators,
+  subfields
+});
+
+const upsertRow = (rows: MarcRow[], tag: string, indicators: string, subfields: Array<{ code: string; value: string }>): MarcRow[] => {
+  const existing = rows.find((row) => row.tag === tag);
+  const normalizedSubfields = subfields.map((item) => createSubfield(item.code, item.value));
+  if (existing) {
+    return rows.map((row) => (
+      row.id === existing.id
+        ? {
+          ...row,
+          indicators,
+          subfields: normalizedSubfields
+        }
+        : row
+    ));
+  }
+
+  return [...rows, createRow(tag, indicators, normalizedSubfields)];
+};
+
+const buildRowsFromForm = (form: FormState): MarcRow[] => {
+  let rows: MarcRow[] = [];
+  rows = upsertRow(rows, '100', '1#', [{ code: 'a', value: form.authors[0] ?? '' }]);
+  rows = upsertRow(rows, '245', '10', [
+    { code: 'a', value: form.title.trim() },
+    { code: 'b', value: form.subtitle.trim() }
+  ]);
+  rows = upsertRow(rows, '260', '##', [
+    { code: 'b', value: form.publisher.trim() },
+    { code: 'c', value: form.publicationYear.trim() }
+  ]);
+  rows = upsertRow(rows, '300', '##', [{ code: 'a', value: form.pages.trim() }]);
+  rows = upsertRow(rows, '650', '#0', [{ code: 'a', value: form.subjects.join(' | ') }]);
+  rows = upsertRow(rows, '020', '##', [{ code: 'a', value: form.isbn.trim() }]);
+  if (form.edition.trim()) {
+    rows = upsertRow(rows, '250', '##', [{ code: 'a', value: form.edition.trim() }]);
+  }
+  if (form.language.trim()) {
+    rows = upsertRow(rows, '041', '##', [{ code: 'a', value: form.language.trim() }]);
+  }
+  if (form.description.trim()) {
+    rows = upsertRow(rows, '520', '##', [{ code: 'a', value: form.description.trim() }]);
+  }
+  return rows;
+};
+
+const readSubfield = (row: MarcRow | undefined, code: string): string => row?.subfields.find((item) => item.code === code)?.value.trim() ?? '';
+
+const rowToJson = (row: MarcRow) => {
+  const indicators = `${row.indicators || '##'}##`.slice(0, 2);
+  const subfields: Record<string, string> = {};
+  row.subfields.forEach((item) => {
+    const code = item.code.trim().slice(0, 1).toLowerCase();
+    if (!code) {
+      return;
+    }
+    subfields[code] = item.value.trim();
+  });
+
+  return {
+    [row.tag.trim()]: {
+      ind1: indicators[0],
+      ind2: indicators[1],
+      subfields
+    }
+  };
+};
+
 export function AdvancedCatalogWorkspace() {
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
+  const [marcRows, setMarcRows] = useState<MarcRow[]>(() => buildRowsFromForm(EMPTY_FORM));
   const [saving, setSaving] = useState(false);
   const [loadingLookup, setLoadingLookup] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
+  const syncingFromRowsRef = useRef(false);
+
+  useEffect(() => {
+    if (syncingFromRowsRef.current) {
+      syncingFromRowsRef.current = false;
+      return;
+    }
+    setMarcRows((current) => {
+      const rebuilt = buildRowsFromForm(form);
+      const merged = current.filter((row) => !['100', '245', '260', '300', '650', '020', '250', '041', '520'].includes(row.tag.trim()));
+      return [...merged, ...rebuilt];
+    });
+  }, [form]);
 
   const preview = useMemo(() => {
-    const title245 = form.subtitle.trim() ? `${form.title.trim()} : ${form.subtitle.trim()}` : form.title.trim();
-    const publication = [form.publisher.trim(), form.publicationYear.trim()].filter(Boolean).join(', ');
-
-    return {
-      '001': 'pré-visualização',
-      '100': form.authors[0] ?? '',
-      '245': title245,
-      '260': publication,
-      '300': form.pages.trim(),
-      '650': form.subjects,
-      '020': form.isbn.trim(),
-      ...(form.edition.trim() ? { '250': form.edition.trim() } : {}),
-      ...(form.language.trim() ? { '041': form.language.trim() } : {}),
-      ...(form.description.trim() ? { '520': form.description.trim() } : {})
-    };
-  }, [form]);
+    const record = marcRows
+      .filter((row) => row.tag.trim())
+      .map((row) => [row.tag.trim(), rowToJson(row)[row.tag.trim()]]);
+    return Object.fromEntries(record);
+  }, [marcRows]);
 
   const payload = useMemo<AdvancedCatalogPayload>(() => ({
     title: form.title.trim(),
@@ -94,8 +188,37 @@ export function AdvancedCatalogWorkspace() {
     edition: form.edition.trim() || undefined,
     language: form.language.trim() || undefined,
     pages: form.pages ? Number(form.pages) : undefined,
-    description: form.description.trim() || undefined
-  }), [form]);
+    description: form.description.trim() || undefined,
+    marc21_full: preview
+  }), [form, preview]);
+
+  const syncFormFromRows = (rows: MarcRow[]) => {
+    const field100 = rows.find((row) => row.tag.trim() === '100');
+    const field245 = rows.find((row) => row.tag.trim() === '245');
+    const field260 = rows.find((row) => row.tag.trim() === '260');
+    const field300 = rows.find((row) => row.tag.trim() === '300');
+    const field650 = rows.find((row) => row.tag.trim() === '650');
+    const field020 = rows.find((row) => row.tag.trim() === '020');
+    const field250 = rows.find((row) => row.tag.trim() === '250');
+    const field041 = rows.find((row) => row.tag.trim() === '041');
+    const field520 = rows.find((row) => row.tag.trim() === '520');
+
+    syncingFromRowsRef.current = true;
+    setForm((current) => ({
+      ...current,
+      title: readSubfield(field245, 'a'),
+      subtitle: readSubfield(field245, 'b'),
+      authors: readSubfield(field100, 'a') ? [readSubfield(field100, 'a')] : [],
+      subjects: readSubfield(field650, 'a').split('|').map((item) => item.trim()).filter(Boolean),
+      isbn: readSubfield(field020, 'a'),
+      publisher: readSubfield(field260, 'b'),
+      publicationYear: readSubfield(field260, 'c'),
+      edition: readSubfield(field250, 'a'),
+      language: readSubfield(field041, 'a'),
+      pages: readSubfield(field300, 'a'),
+      description: readSubfield(field520, 'a')
+    }));
+  };
 
   const addTag = (kind: 'authors' | 'subjects', value: string) => {
     const normalized = value.trim();
@@ -244,6 +367,115 @@ export function AdvancedCatalogWorkspace() {
         </div>
 
         {toast ? <p className="rounded-md bg-slate-100 px-3 py-2 text-sm text-slate-700">{toast}</p> : null}
+
+        <section className="pt-4">
+          <div className="flex items-center justify-between gap-3">
+            <h4 className="text-base font-semibold text-slate-900">Editor MARC21 Avançado</h4>
+            <button
+              className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700"
+              onClick={() => setMarcRows((current) => [...current, createRow('', '##', [createSubfield('a', '')])])}
+              type="button"
+            >
+              + Campo
+            </button>
+          </div>
+
+          <div className="mt-3 overflow-x-auto rounded-lg border border-slate-200">
+            <table className="w-full min-w-[680px] text-left text-sm">
+              <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
+                <tr>
+                  <th className="px-3 py-2">Campo</th>
+                  <th className="px-3 py-2">Indicadores</th>
+                  <th className="px-3 py-2">Subcampos</th>
+                  <th className="px-3 py-2" />
+                </tr>
+              </thead>
+              <tbody>
+                {marcRows.map((row) => (
+                  <tr className="border-t border-slate-100 align-top" key={row.id}>
+                    <td className="px-3 py-2">
+                      <input
+                        className="w-20 rounded-md border border-emerald-200 bg-emerald-50 px-2 py-1 font-mono text-emerald-900"
+                        maxLength={3}
+                        onChange={(event) => setMarcRows((current) => current.map((item) => item.id === row.id ? { ...item, tag: event.target.value } : item))}
+                        value={row.tag}
+                      />
+                    </td>
+                    <td className="px-3 py-2">
+                      <input
+                        className="w-16 rounded-md border border-slate-200 px-2 py-1 font-mono"
+                        maxLength={2}
+                        onChange={(event) => setMarcRows((current) => current.map((item) => item.id === row.id ? { ...item, indicators: event.target.value } : item))}
+                        value={row.indicators}
+                      />
+                    </td>
+                    <td className="space-y-2 px-3 py-2">
+                      {row.subfields.map((subfield) => (
+                        <div className="grid grid-cols-[4.5rem_1fr_auto] gap-2" key={subfield.id}>
+                          <input
+                            className="rounded-md border border-slate-200 px-2 py-1 font-mono"
+                            maxLength={1}
+                            onChange={(event) => setMarcRows((current) => current.map((item) => item.id === row.id ? {
+                              ...item,
+                              subfields: item.subfields.map((entry) => entry.id === subfield.id ? { ...entry, code: event.target.value } : entry)
+                            } : item))}
+                            value={subfield.code}
+                          />
+                          <input
+                            className="rounded-md border border-slate-200 px-2 py-1"
+                            onChange={(event) => setMarcRows((current) => current.map((item) => item.id === row.id ? {
+                              ...item,
+                              subfields: item.subfields.map((entry) => entry.id === subfield.id ? { ...entry, value: event.target.value } : entry)
+                            } : item))}
+                            value={subfield.value}
+                          />
+                          <button
+                            className="rounded-md border border-slate-200 px-2 py-1 text-xs"
+                            onClick={() => setMarcRows((current) => current.map((item) => item.id === row.id ? {
+                              ...item,
+                              subfields: item.subfields.filter((entry) => entry.id !== subfield.id)
+                            } : item))}
+                            type="button"
+                          >
+                            remover
+                          </button>
+                        </div>
+                      ))}
+                      <button
+                        className="rounded-md border border-brand-200 bg-brand-50 px-2 py-1 text-xs font-semibold text-brand-800"
+                        onClick={() => setMarcRows((current) => current.map((item) => item.id === row.id ? {
+                          ...item,
+                          subfields: [...item.subfields, createSubfield('a', '')]
+                        } : item))}
+                        type="button"
+                      >
+                        + Subcampo
+                      </button>
+                    </td>
+                    <td className="px-3 py-2">
+                      <div className="flex flex-col gap-2">
+                        <button
+                          className="rounded-md border border-slate-200 px-2 py-1 text-xs"
+                          onClick={() => setMarcRows((current) => current.filter((item) => item.id !== row.id))}
+                          type="button"
+                        >
+                          excluir
+                        </button>
+                        <button
+                          className="rounded-md border border-emerald-200 bg-emerald-50 px-2 py-1 text-xs font-semibold text-emerald-800"
+                          onClick={() => syncFormFromRows(marcRows)}
+                          type="button"
+                        >
+                          sincronizar
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
       </form>
 
       <div className="rounded-xl border bg-white p-5 shadow-sm">

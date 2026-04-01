@@ -58,7 +58,7 @@ class BookService:
         subjects = [subject.strip() for subject in payload.subjects if subject.strip()]
 
         temporary_control_number = "pending"
-        marc21_record = BookService.build_simplified_marc21_record(
+        marc21_record = payload.marc21_full or BookService.build_simplified_marc21_record(
             control_number=temporary_control_number,
             title=title,
             subtitle=subtitle,
@@ -90,7 +90,7 @@ class BookService:
         db.add(book)
         await db.flush()
 
-        finalized_record = {**marc21_record, "001": str(book.id)}
+        finalized_record = {**marc21_record, "001": str(book.id)} if isinstance(marc21_record, dict) else {"001": str(book.id)}
         book.marc21_record = finalized_record
 
         await db.commit()
