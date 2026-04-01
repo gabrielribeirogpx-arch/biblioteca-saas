@@ -1,5 +1,5 @@
 from fastapi import HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.user import User
@@ -30,7 +30,16 @@ class UserService:
         return UserOut(id=user.id, email=user.email, full_name=user.full_name, role=user.role, password=None)
 
     @staticmethod
-    async def list_users(db: AsyncSession, library_id: int) -> list[UserOut]:
-        result = await db.execute(select(User).where(User.library_id == library_id).order_by(User.id.asc()))
+    async def list_users(db: AsyncSession, library_id: int, page: int = 1, page_size: int = 20) -> dict:
+        offset = (page - 1) * page_size
+        total = await db.scalar(select(func.count()).select_from(User).where(User.library_id == library_id))
+        result = await db.execute(
+            select(User).where(User.library_id == library_id).order_by(User.id.asc()).offset(offset).limit(page_size)
+        )
         users = result.scalars().all()
-        return [UserOut(id=user.id, email=user.email, full_name=user.full_name, role=user.role, password=None) for user in users]
+        return {
+            "items": [UserOut(id=user.id, email=user.email, full_name=user.full_name, role=user.role, password=None) for user in users],
+            "page": page,
+            "page_size": page_size,
+            "total": total or 0,
+        }

@@ -24,6 +24,15 @@ class BookOut(BaseModel):
     marc21_record: dict[str, Any] = Field(default_factory=dict)
 
 
+
+
+class BookListResponse(BaseModel):
+    items: list[BookOut]
+    page: int
+    page_size: int
+    total: int
+
+
 class MARC21ImportRequest(BaseModel):
     record: dict[str, Any]
     category: str = "general"

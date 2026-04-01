@@ -44,8 +44,6 @@ class AuthService:
             "exp": expire,
         })
 
-        print("TOKEN EXPIRA EM:", expire)
-
         encoded_jwt = jwt.encode(to_encode, settings.JWT_SECRET_KEY, algorithm=settings.JWT_ALGORITHM)
 
         return encoded_jwt
@@ -84,11 +82,6 @@ class AuthService:
                 )
             )
         ).scalar_one_or_none()
-
-        print("LOGIN DEBUG:")
-        print("email:", login_identifier)
-        print("tenant:", getattr(tenant, "slug", tenant.code) if tenant else None)
-        print("user encontrado:", user is not None)
 
         if not user or not user.is_active:
             await AuditService.log_event(

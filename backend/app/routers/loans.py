@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Query, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import (
@@ -11,20 +11,22 @@ from app.api.deps import (
     require_user,
 )
 from app.models.audit_log import AuditActorType, AuditCategory
-from app.schemas.loans import LoanCreate, LoanOut, LoanRenewRequest
+from app.schemas.loans import LoanCreate, LoanListResponse, LoanOut, LoanRenewRequest
 from app.services.audit_service import AuditService
 from app.services.loans import LoanService
 
 router = APIRouter()
 
 
-@router.get("/", response_model=list[LoanOut], dependencies=[Depends(get_current_user)])
+@router.get("/", response_model=LoanListResponse, dependencies=[Depends(get_current_user)])
 async def list_loans(
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=20, ge=1, le=100),
     db: AsyncSession = Depends(get_db),
     ctx: TenantScopedContext = Depends(get_tenant_context),
     auth: AuthContext = Depends(require_user),
-) -> list[LoanOut]:
-    return await LoanService.list_loans(db, ctx.tenant.library_id)
+) -> LoanListResponse:
+    return await LoanService.list_loans(db, ctx.tenant.library_id, page=page, page_size=page_size)
 
 
 @router.post("/", response_model=LoanOut, dependencies=[Depends(get_current_user)])

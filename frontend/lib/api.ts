@@ -54,6 +54,33 @@ export interface MostBorrowedItem {
   checkout_count: number;
 }
 
+
+export interface Reservation {
+  id: number;
+  user_id: number;
+  copy_id: number;
+  status: string;
+  reserved_at: string;
+  expires_at?: string | null;
+}
+
+export interface Fine {
+  id: number;
+  user_id: number;
+  loan_id: number;
+  amount: string;
+  currency: string;
+  status: string;
+  reason?: string | null;
+}
+
+export interface PaginatedResponse<T> {
+  items: T[];
+  page: number;
+  page_size: number;
+  total: number;
+}
+
 interface ApiClientConfig {
   baseUrl?: string;
   token?: string;
@@ -229,7 +256,7 @@ export async function apiFetch<T = unknown>(url: string, options: RequestInit = 
 }
 
 export async function getBooks(): Promise<Book[]> {
-  return (await apiFetch<Book[]>('/api/v1/books/')) ?? [];
+  return (await apiFetch<PaginatedResponse<Book>>('/api/v1/books/?page=1&page_size=50'))?.items ?? [];
 }
 
 export async function getCopies(): Promise<Copy[]> {
@@ -237,15 +264,15 @@ export async function getCopies(): Promise<Copy[]> {
 }
 
 export async function getLoans(): Promise<Loan[]> {
-  return (await apiFetch<Loan[]>('/api/v1/loans/')) ?? [];
+  return (await apiFetch<PaginatedResponse<Loan>>('/api/v1/loans/?page=1&page_size=50'))?.items ?? [];
 }
 
 export async function getUsers(): Promise<User[]> {
-  return (await apiFetch<User[]>('/api/v1/users/')) ?? [];
+  return (await apiFetch<PaginatedResponse<User>>('/api/v1/users/?page=1&page_size=50'))?.items ?? [];
 }
 
 export async function getReports(): Promise<ReportSummary> {
-  return (await apiFetch<ReportSummary>('/api/v1/reports')) ?? { total_books: 0, total_copies: 0, active_loans: 0 };
+  return (await apiFetch<ReportSummary>('/api/v1/reports/summary')) ?? { total_books: 0, total_copies: 0, active_loans: 0 };
 }
 
 export async function getHealth(): Promise<{ status: string }> {
@@ -280,16 +307,32 @@ export class ApiClient {
     });
   }
 
-  listBooks(): Promise<Book[] | null> {
-    return this.request<Book[]>('/books/');
+  listBooks(page = 1, pageSize = 20): Promise<PaginatedResponse<Book> | null> {
+    return this.request<PaginatedResponse<Book>>(`/books/?page=${page}&page_size=${pageSize}`);
   }
 
-  listLoans(): Promise<Loan[] | null> {
-    return this.request<Loan[]>('/loans/');
+  listLoans(page = 1, pageSize = 20): Promise<PaginatedResponse<Loan> | null> {
+    return this.request<PaginatedResponse<Loan>>(`/loans/?page=${page}&page_size=${pageSize}`);
   }
 
-  listUsers(): Promise<User[] | null> {
-    return this.request<User[]>('/users/');
+  listUsers(page = 1, pageSize = 20): Promise<PaginatedResponse<User> | null> {
+    return this.request<PaginatedResponse<User>>(`/users/?page=${page}&page_size=${pageSize}`);
+  }
+
+  listReservations(page = 1, pageSize = 20): Promise<PaginatedResponse<Reservation> | null> {
+    return this.request<PaginatedResponse<Reservation>>(`/reservations/?page=${page}&page_size=${pageSize}`);
+  }
+
+  createReservation(copyId: number): Promise<Reservation | null> {
+    return this.request<Reservation>('/reservations/', { method: 'POST', body: JSON.stringify({ copy_id: copyId }) });
+  }
+
+  listFines(page = 1, pageSize = 20): Promise<PaginatedResponse<Fine> | null> {
+    return this.request<PaginatedResponse<Fine>>(`/fines/?page=${page}&page_size=${pageSize}`);
+  }
+
+  payFine(fineId: number, amount: number): Promise<Fine | null> {
+    return this.request<Fine>(`/fines/${fineId}/pay`, { method: 'POST', body: JSON.stringify({ amount }) });
   }
 
   getSummaryReport(): Promise<ReportSummary | null> {

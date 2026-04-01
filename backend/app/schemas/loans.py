@@ -16,3 +16,10 @@ class LoanOut(LoanCreate):
     id: int
     user_id: str
     status: str
+
+
+class LoanListResponse(BaseModel):
+    items: list[LoanOut]
+    page: int
+    page_size: int
+    total: int

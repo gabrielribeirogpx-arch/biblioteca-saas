@@ -27,13 +27,13 @@ export default function CatalogPage() {
       return;
     }
 
-    apiFetch<Book[]>('/api/v1/books/')
+    apiFetch<{ items: Book[] }>('/api/v1/books/?page=1&page_size=50')
       .then((books) => {
         if (!isMounted || !books) {
           return;
         }
         setRows(
-          books.map((book) => ({
+          (books.items ?? []).map((book) => ({
             title: book.title,
             isbn: book.isbn ?? 'N/A',
             authors: book.authors.join(', ') || 'N/A',
