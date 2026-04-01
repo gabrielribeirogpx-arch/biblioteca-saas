@@ -1,7 +1,15 @@
 from fastapi import APIRouter, Depends, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import AuthContext, TenantScopedContext, get_db, get_tenant_context, require_librarian, require_user
+from app.api.deps import (
+    AuthContext,
+    TenantScopedContext,
+    get_current_user,
+    get_db,
+    get_tenant_context,
+    require_librarian,
+    require_user,
+)
 from app.models.audit_log import AuditActorType, AuditCategory
 from app.schemas.books import (
     AACR2ValidateRequest,
@@ -20,7 +28,7 @@ from app.services.books import BookService
 router = APIRouter()
 
 
-@router.get("/", response_model=list[BookOut])
+@router.get("/", response_model=list[BookOut], dependencies=[Depends(get_current_user)])
 async def list_books(
     db: AsyncSession = Depends(get_db),
     ctx: TenantScopedContext = Depends(get_tenant_context),
@@ -29,7 +37,7 @@ async def list_books(
     return await BookService.list_books(db, ctx.tenant.library_id)
 
 
-@router.post("/", response_model=BookOut)
+@router.post("/", response_model=BookOut, dependencies=[Depends(get_current_user)])
 async def create_book(
     payload: BookCreate,
     request: Request,
@@ -55,7 +63,7 @@ async def create_book(
     return created
 
 
-@router.post("/import", response_model=MARC21ImportResponse)
+@router.post("/import", response_model=MARC21ImportResponse, dependencies=[Depends(get_current_user)])
 async def import_marc21(
     payload: MARC21ImportRequest,
     request: Request,
@@ -90,7 +98,7 @@ async def import_marc21(
     )
 
 
-@router.get("/{book_id}/export", response_model=MARC21ExportResponse)
+@router.get("/{book_id}/export", response_model=MARC21ExportResponse, dependencies=[Depends(get_current_user)])
 async def export_marc21(
     book_id: int,
     request: Request,
@@ -126,7 +134,7 @@ async def export_marc21(
     )
 
 
-@router.post("/validate", response_model=AACR2ValidateResponse)
+@router.post("/validate", response_model=AACR2ValidateResponse, dependencies=[Depends(get_current_user)])
 async def validate_aacr2(
     payload: AACR2ValidateRequest,
     request: Request,
@@ -163,7 +171,7 @@ async def validate_aacr2(
     )
 
 
-@router.post("/lookup", response_model=Z3950LookupResponse)
+@router.post("/lookup", response_model=Z3950LookupResponse, dependencies=[Depends(get_current_user)])
 async def lookup_z3950(
     payload: Z3950LookupRequest,
     request: Request,

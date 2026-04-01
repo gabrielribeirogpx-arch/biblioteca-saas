@@ -1,7 +1,15 @@
 from fastapi import APIRouter, Depends, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import AuthContext, TenantScopedContext, get_db, get_tenant_context, require_librarian, require_user
+from app.api.deps import (
+    AuthContext,
+    TenantScopedContext,
+    get_current_user,
+    get_db,
+    get_tenant_context,
+    require_librarian,
+    require_user,
+)
 from app.models.audit_log import AuditActorType, AuditCategory
 from app.schemas.loans import LoanCreate, LoanOut, LoanRenewRequest
 from app.services.audit_service import AuditService
@@ -10,7 +18,7 @@ from app.services.loans import LoanService
 router = APIRouter()
 
 
-@router.get("/", response_model=list[LoanOut])
+@router.get("/", response_model=list[LoanOut], dependencies=[Depends(get_current_user)])
 async def list_loans(
     db: AsyncSession = Depends(get_db),
     ctx: TenantScopedContext = Depends(get_tenant_context),
@@ -19,7 +27,7 @@ async def list_loans(
     return await LoanService.list_loans(db, ctx.tenant.library_id)
 
 
-@router.post("/", response_model=LoanOut)
+@router.post("/", response_model=LoanOut, dependencies=[Depends(get_current_user)])
 async def create_loan(
     payload: LoanCreate,
     request: Request,
@@ -45,7 +53,7 @@ async def create_loan(
     return created
 
 
-@router.post("/{loan_id}/renew", response_model=LoanOut)
+@router.post("/{loan_id}/renew", response_model=LoanOut, dependencies=[Depends(get_current_user)])
 async def renew_loan(
     loan_id: int,
     payload: LoanRenewRequest,
@@ -72,7 +80,7 @@ async def renew_loan(
     return renewed
 
 
-@router.post("/{loan_id}/return", response_model=LoanOut)
+@router.post("/{loan_id}/return", response_model=LoanOut, dependencies=[Depends(get_current_user)])
 async def return_loan(
     loan_id: int,
     request: Request,
