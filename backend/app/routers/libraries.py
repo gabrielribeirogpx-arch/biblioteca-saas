@@ -10,6 +10,14 @@ from app.schemas.libraries import LibraryCreate, LibraryListItem
 router = APIRouter()
 
 
+def _assert_library_tenant_scope(library: Library, expected_tenant_id: int) -> None:
+    if library.tenant_id != expected_tenant_id:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Security violation: cross-tenant library leakage detected",
+        )
+
+
 @router.post("", response_model=LibraryListItem)
 async def create_library(
     payload: LibraryCreate,
@@ -34,6 +42,8 @@ async def create_library(
     if source_library is None:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Library access denied")
 
+    _assert_library_tenant_scope(source_library, current_user.tenant_id)
+
     library = Library(
         tenant_id=current_user.tenant_id,
         organization_id=source_library.organization_id,
@@ -49,6 +59,8 @@ async def create_library(
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Library code already exists in tenant") from exc
 
     await db.refresh(library)
+    _assert_library_tenant_scope(library, current_user.tenant_id)
+
     return LibraryListItem(
         id=library.id,
         code=library.code,
@@ -70,6 +82,10 @@ async def list_libraries(
         .order_by(Library.name.asc())
     )
     libraries = result.scalars().all()
+
+    for library in libraries:
+        _assert_library_tenant_scope(library, current_user.tenant_id)
+
     return [
         LibraryListItem(
             id=library.id,

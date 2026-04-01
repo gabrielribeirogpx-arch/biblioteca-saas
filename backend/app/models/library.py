@@ -11,8 +11,8 @@ class Library(Base):
     __table_args__ = (UniqueConstraint("tenant_id", "code", name="uq_libraries_tenant_code"),)
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    tenant_id: Mapped[int | None] = mapped_column(
-        ForeignKey("tenants.id", ondelete="RESTRICT"), nullable=True, index=True
+    tenant_id: Mapped[int] = mapped_column(
+        ForeignKey("tenants.id", ondelete="RESTRICT"), nullable=False, index=True
     )
     organization_id: Mapped[int] = mapped_column(
         ForeignKey("organizations.id", ondelete="RESTRICT"), nullable=False, index=True
