@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, Query
+import logging
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import AuthContext, TenantScopedContext, get_db, get_tenant_context, require_admin
@@ -13,6 +14,7 @@ from app.schemas.reports import (
 from app.services.reports import ReportService
 
 router = APIRouter()
+logger = logging.getLogger("app.request")
 
 
 @router.get("/summary", response_model=ReportSummary)
@@ -21,6 +23,13 @@ async def report_summary(
     ctx: TenantScopedContext = Depends(get_tenant_context),
     auth: AuthContext = Depends(require_admin),
 ) -> ReportSummary:
+    logger.info(
+        "reports.summary context tenant=%s organization_id=%s library_id=%s user_id=%s",
+        ctx.tenant.tenant_id,
+        ctx.tenant.organization_id,
+        ctx.tenant.library_id,
+        auth.user_id,
+    )
     return await ReportService.get_summary(db, ctx.tenant.library_id, ctx.tenant.tenant_id)
 
 

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections.abc import AsyncGenerator, Callable
 from dataclasses import dataclass
+import logging
 
 from fastapi import Depends, Header, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
@@ -21,6 +22,7 @@ from app.services.auth_service import AuthService
 
 
 DEFAULT_TENANT_CODE = "default"
+logger = logging.getLogger("app.request")
 
 
 @dataclass(slots=True)
@@ -113,12 +115,15 @@ async def resolve_tenant(
         or _extract_subdomain(request.headers.get("host"))
         or DEFAULT_TENANT_CODE
     ).strip()
+    logger.info("tenant.resolve requested tenant_key=%s", tenant_key)
 
     library = await _resolve_library_from_tenant_key(db, tenant_key)
     if not library and tenant_key != DEFAULT_TENANT_CODE:
+        logger.warning("tenant.resolve miss for tenant_key=%s; attempting fallback=%s", tenant_key, DEFAULT_TENANT_CODE)
         library = await _resolve_library_from_tenant_key(db, DEFAULT_TENANT_CODE)
 
     if not library:
+        logger.error("tenant.resolve failed; default tenant unavailable")
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Default tenant is unavailable")
 
     tenant_context = TenantContext(
@@ -129,6 +134,12 @@ async def resolve_tenant(
         library_code=library.code,
     )
     request.state.tenant_context = tenant_context
+    logger.info(
+        "tenant.resolve success tenant=%s organization_id=%s library_id=%s",
+        tenant_context.tenant_id,
+        tenant_context.organization_id,
+        tenant_context.library_id,
+    )
     return tenant_context
 
 
@@ -258,9 +269,11 @@ async def get_current_tenant(
 ) -> TenantContext:
     tenant_query = request.query_params.get("tenant")
     tenant_key = (x_tenant_slug or x_tenant_id or tenant_query or str(user.library_id)).strip()
+    logger.info("tenant.current requested tenant_key=%s user_id=%s", tenant_key, user.id)
 
     library = await _resolve_library_from_tenant_key(db, tenant_key)
     if not library:
+        logger.error("tenant.current failed tenant_key=%s user_id=%s", tenant_key, user.id)
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tenant not found")
 
     tenant_context = TenantContext(
@@ -271,6 +284,13 @@ async def get_current_tenant(
         library_code=library.code,
     )
     request.state.tenant_context = tenant_context
+    logger.info(
+        "tenant.current success tenant=%s organization_id=%s library_id=%s user_id=%s",
+        tenant_context.tenant_id,
+        tenant_context.organization_id,
+        tenant_context.library_id,
+        user.id,
+    )
     return tenant_context
 
 
