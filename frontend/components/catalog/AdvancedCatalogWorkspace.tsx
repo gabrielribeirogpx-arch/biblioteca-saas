@@ -76,6 +76,11 @@ interface MarcValidationResult {
   fieldErrors: Record<string, string[]>;
 }
 
+interface AuthorityOption {
+  id: number;
+  name: string;
+}
+
 const EMPTY_FORM: FormState = {
   title: '',
   subtitle: '',
@@ -264,6 +269,10 @@ export function AdvancedCatalogWorkspace() {
   const [loadingLookup, setLoadingLookup] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const [validationErrors, setValidationErrors] = useState<Record<string, string[]>>({});
+  const [authorSuggestions, setAuthorSuggestions] = useState<AuthorityOption[]>([]);
+  const [subjectSuggestions, setSubjectSuggestions] = useState<AuthorityOption[]>([]);
+  const [loadingAuthorSuggestions, setLoadingAuthorSuggestions] = useState(false);
+  const [loadingSubjectSuggestions, setLoadingSubjectSuggestions] = useState(false);
   const syncingFromRowsRef = useRef(false);
 
   useEffect(() => {
@@ -362,6 +371,63 @@ export function AdvancedCatalogWorkspace() {
     if (event.key === 'Enter' || event.key === ',') {
       event.preventDefault();
       addTag(kind, currentValue);
+    }
+  };
+
+  useEffect(() => {
+    const input = form.authorInput.trim();
+    if (!input) {
+      setAuthorSuggestions([]);
+      return;
+    }
+
+    const timeout = setTimeout(async () => {
+      setLoadingAuthorSuggestions(true);
+      try {
+        const data = await apiFetch<AuthorityOption[]>(`/api/v1/authors?q=${encodeURIComponent(input)}`);
+        setAuthorSuggestions(data ?? []);
+      } catch {
+        setAuthorSuggestions([]);
+      } finally {
+        setLoadingAuthorSuggestions(false);
+      }
+    }, 250);
+
+    return () => clearTimeout(timeout);
+  }, [form.authorInput]);
+
+  useEffect(() => {
+    const input = form.subjectInput.trim();
+    if (!input) {
+      setSubjectSuggestions([]);
+      return;
+    }
+
+    const timeout = setTimeout(async () => {
+      setLoadingSubjectSuggestions(true);
+      try {
+        const data = await apiFetch<AuthorityOption[]>(`/api/v1/subjects?q=${encodeURIComponent(input)}`);
+        setSubjectSuggestions(data ?? []);
+      } catch {
+        setSubjectSuggestions([]);
+      } finally {
+        setLoadingSubjectSuggestions(false);
+      }
+    }, 250);
+
+    return () => clearTimeout(timeout);
+  }, [form.subjectInput]);
+
+  const persistAuthority = async (kind: 'authors' | 'subjects', value: string) => {
+    const endpoint = kind === 'authors' ? '/api/v1/authors' : '/api/v1/subjects';
+    try {
+      const authority = await apiFetch<AuthorityOption>(endpoint, {
+        method: 'POST',
+        body: JSON.stringify({ name: value.trim() })
+      });
+      return authority?.name ?? value.trim();
+    } catch {
+      return value.trim();
     }
   };
 
@@ -478,18 +544,38 @@ export function AdvancedCatalogWorkspace() {
             inputValue={form.authorInput}
             tags={form.authors}
             onInputChange={(value) => setForm((s) => ({ ...s, authorInput: value }))}
-            onKeyDown={(event) => onTagKeyDown(event, 'authors', form.authorInput)}
-            onAdd={() => addTag('authors', form.authorInput)}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') {
+                event.preventDefault();
+                void persistAuthority('authors', form.authorInput).then((name) => addTag('authors', name));
+                return;
+              }
+              onTagKeyDown(event, 'authors', form.authorInput);
+            }}
+            onAdd={() => void persistAuthority('authors', form.authorInput).then((name) => addTag('authors', name))}
             onRemove={(value) => removeTag('authors', value)}
+            suggestions={authorSuggestions.map((item) => item.name)}
+            loadingSuggestions={loadingAuthorSuggestions}
+            onSelectSuggestion={(value) => addTag('authors', value)}
           />
           <TagField
             label="Assuntos"
             inputValue={form.subjectInput}
             tags={form.subjects}
             onInputChange={(value) => setForm((s) => ({ ...s, subjectInput: value }))}
-            onKeyDown={(event) => onTagKeyDown(event, 'subjects', form.subjectInput)}
-            onAdd={() => addTag('subjects', form.subjectInput)}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') {
+                event.preventDefault();
+                void persistAuthority('subjects', form.subjectInput).then((name) => addTag('subjects', name));
+                return;
+              }
+              onTagKeyDown(event, 'subjects', form.subjectInput);
+            }}
+            onAdd={() => void persistAuthority('subjects', form.subjectInput).then((name) => addTag('subjects', name))}
             onRemove={(value) => removeTag('subjects', value)}
+            suggestions={subjectSuggestions.map((item) => item.name)}
+            loadingSuggestions={loadingSubjectSuggestions}
+            onSelectSuggestion={(value) => addTag('subjects', value)}
           />
           <Field error={validationErrors['020$a']?.[0]} label="ISBN" value={form.isbn} onChange={(value) => setForm((s) => ({ ...s, isbn: value }))} />
           <Field label="Editora" value={form.publisher} onChange={(value) => setForm((s) => ({ ...s, publisher: value }))} />
@@ -728,14 +814,29 @@ interface TagFieldProps {
   onKeyDown: (event: KeyboardEvent<HTMLInputElement>) => void;
   onAdd: () => void;
   onRemove: (value: string) => void;
+  suggestions?: string[];
+  loadingSuggestions?: boolean;
+  onSelectSuggestion?: (value: string) => void;
   error?: string;
 }
 
-function TagField({ label, tags, inputValue, onInputChange, onKeyDown, onAdd, onRemove, error }: TagFieldProps) {
+function TagField({
+  label,
+  tags,
+  inputValue,
+  onInputChange,
+  onKeyDown,
+  onAdd,
+  onRemove,
+  suggestions = [],
+  loadingSuggestions = false,
+  onSelectSuggestion,
+  error
+}: TagFieldProps) {
   return (
     <label className="block text-sm font-medium text-slate-700">
       {label}
-      <div className="mt-1 flex gap-2">
+      <div className="relative mt-1 flex gap-2">
         <input
           className={`w-full rounded-lg border px-3 py-2 text-sm shadow-sm focus:outline-none ${error ? 'border-red-300 focus:border-red-400' : 'border-slate-200 focus:border-brand-400'}`}
           onChange={(event) => onInputChange(event.target.value)}
@@ -743,6 +844,24 @@ function TagField({ label, tags, inputValue, onInputChange, onKeyDown, onAdd, on
           value={inputValue}
         />
         <button className="rounded-lg border border-slate-300 px-3 text-sm" onClick={onAdd} type="button">+</button>
+        {(loadingSuggestions || suggestions.length > 0) && inputValue.trim() ? (
+          <div className="absolute left-0 top-[calc(100%+4px)] z-10 w-full rounded-md border border-slate-200 bg-white shadow-lg">
+            {loadingSuggestions ? (
+              <p className="px-3 py-2 text-xs text-slate-500">Buscando...</p>
+            ) : (
+              suggestions.map((suggestion) => (
+                <button
+                  className="block w-full px-3 py-2 text-left text-sm hover:bg-slate-50"
+                  key={suggestion}
+                  onClick={() => onSelectSuggestion?.(suggestion)}
+                  type="button"
+                >
+                  {suggestion}
+                </button>
+              ))
+            )}
+          </div>
+        ) : null}
       </div>
       {error ? <span className="mt-1 block text-xs text-red-600">{error}</span> : null}
       <div className="mt-2 flex flex-wrap gap-2">
