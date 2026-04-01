@@ -42,6 +42,11 @@ export interface LibraryOption {
   organization_id: number;
 }
 
+export interface LibraryCreateInput {
+  name: string;
+  code: string;
+}
+
 export interface ReportSummary {
   total_books: number;
   total_copies: number;
@@ -95,7 +100,7 @@ interface ApiClientConfig {
   tenantId?: string;
 }
 
-class ApiError extends Error {
+export class ApiError extends Error {
   constructor(
     message: string,
     public readonly status: number,
@@ -301,6 +306,13 @@ export async function getLibraries(): Promise<LibraryOption[]> {
   return (await apiFetch<LibraryOption[]>('/api/v1/libraries')) ?? [];
 }
 
+export async function createLibrary(payload: LibraryCreateInput): Promise<LibraryOption | null> {
+  return await apiFetch<LibraryOption>('/api/v1/libraries', {
+    method: 'POST',
+    body: JSON.stringify(payload)
+  });
+}
+
 export async function getReports(): Promise<ReportSummary> {
   return (await apiFetch<ReportSummary>('/api/v1/reports/summary')) ?? { total_books: 0, total_copies: 0, active_loans: 0 };
 }
@@ -381,5 +393,3 @@ export class ApiClient {
 export function createApiClient(config?: ApiClientConfig): ApiClient {
   return new ApiClient(config);
 }
-
-export { ApiError };
