@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 
 import { useAuth } from '../context/AuthContext';
+import { getLibraries, type LibraryOption } from '../lib/api';
 
 interface StoredUser {
   email?: string;
@@ -17,6 +18,7 @@ export function UserMenu() {
   const [name, setName] = useState('');
   const [tenant, setTenant] = useState('');
   const [nextLibraryId, setNextLibraryId] = useState('');
+  const [libraries, setLibraries] = useState<LibraryOption[]>([]);
 
   useEffect(() => {
     if (typeof window === 'undefined') {
@@ -42,6 +44,44 @@ export function UserMenu() {
     setEmail(parsedUser?.email ?? storedEmail);
     setName(parsedUser?.name ?? parsedUser?.full_name ?? '');
   }, [isAuthenticated, libraryId]);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadLibraries() {
+      if (!isAuthenticated) {
+        if (isMounted) {
+          setLibraries([]);
+        }
+        return;
+      }
+
+      try {
+        const tenantLibraries = await getLibraries();
+        if (!isMounted) {
+          return;
+        }
+
+        setLibraries(tenantLibraries);
+
+        if (!libraryId && tenantLibraries.length > 0) {
+          const firstLibraryId = String(tenantLibraries[0].id);
+          setLibraryId(firstLibraryId);
+          setNextLibraryId(firstLibraryId);
+        }
+      } catch {
+        if (isMounted) {
+          setLibraries([]);
+        }
+      }
+    }
+
+    loadLibraries();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [isAuthenticated, libraryId, setLibraryId]);
 
   const displayName = useMemo(() => {
     if (name.trim()) {
@@ -71,25 +111,25 @@ export function UserMenu() {
           {email ? <p className="text-xs text-slate-600">{email}</p> : null}
           {tenant ? <p className="mt-1 text-xs text-slate-500">Tenant: {tenant}</p> : null}
           <div className="mt-2">
-            <label className="text-xs text-slate-500">Biblioteca (library_id)</label>
-            <input
+            <label className="text-xs text-slate-500">Biblioteca</label>
+            <select
               value={nextLibraryId}
-              onChange={(event) => setNextLibraryId(event.target.value)}
-              className="mt-1 w-full rounded border border-slate-300 px-2 py-1 text-xs"
-              placeholder="Ex.: 1"
-            />
-            <button
-              type="button"
-              className="mt-1 w-full rounded-md bg-slate-700 px-2 py-1 text-xs font-medium text-white hover:bg-slate-800"
-              onClick={() => {
-                const normalized = nextLibraryId.trim();
-                if (normalized) {
-                  setLibraryId(normalized);
+              onChange={(event) => {
+                const selectedLibraryId = event.target.value;
+                setNextLibraryId(selectedLibraryId);
+                if (selectedLibraryId) {
+                  setLibraryId(selectedLibraryId);
                 }
               }}
+              className="mt-1 w-full rounded border border-slate-300 px-2 py-1 text-xs"
             >
-              Trocar biblioteca
-            </button>
+              <option value="">Selecione uma biblioteca</option>
+              {libraries.map((library) => (
+                <option key={library.id} value={library.id}>
+                  {library.name}
+                </option>
+              ))}
+            </select>
           </div>
 
           <button

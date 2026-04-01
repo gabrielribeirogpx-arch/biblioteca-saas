@@ -35,6 +35,13 @@ export interface User {
   role: UserRole;
 }
 
+export interface LibraryOption {
+  id: number;
+  code: string;
+  name: string;
+  organization_id: number;
+}
+
 export interface ReportSummary {
   total_books: number;
   total_copies: number;
@@ -288,6 +295,10 @@ export async function getLoans(): Promise<Loan[]> {
 
 export async function getUsers(): Promise<User[]> {
   return (await apiFetch<PaginatedResponse<User>>('/api/v1/users/?page=1&page_size=50'))?.items ?? [];
+}
+
+export async function getLibraries(): Promise<LibraryOption[]> {
+  return (await apiFetch<LibraryOption[]>('/api/v1/libraries')) ?? [];
 }
 
 export async function getReports(): Promise<ReportSummary> {
