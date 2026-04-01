@@ -195,8 +195,12 @@ async def get_current_user(
     user_id = payload.get("sub")
     token_tenant = payload.get("tenant")
 
-    if not user_id:
+    if user_id is None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
+    try:
+        user_id = int(user_id)
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token subject") from None
 
     if tenant_slug:
         tenant_slug = tenant_slug.strip()

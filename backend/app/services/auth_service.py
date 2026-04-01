@@ -31,7 +31,8 @@ class AuthService:
     @staticmethod
     def create_access_token(payload: TokenPayload) -> str:
         to_encode = {
-            "sub": payload.sub,
+            # RFC 7519 expects "sub" as a string. PyJWT validates this claim type on decode.
+            "sub": str(payload.sub),
             "role": payload.role.value,
             "library_id": payload.library_id,
             "tenant": payload.tenant,
