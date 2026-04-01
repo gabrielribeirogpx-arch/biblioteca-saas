@@ -55,6 +55,22 @@ interface MarcRow {
   subfields: MarcSubfield[];
 }
 
+interface MarcPreviewField {
+  ind1?: string;
+  ind2?: string;
+  subfields?: Record<string, string>;
+}
+
+interface MarcHumanToken {
+  type: 'field' | 'subfield' | 'value';
+  text: string;
+}
+
+interface MarcHumanLine {
+  id: string;
+  tokens: MarcHumanToken[];
+}
+
 const EMPTY_FORM: FormState = {
   title: '',
   subtitle: '',
@@ -150,6 +166,35 @@ const rowToJson = (row: MarcRow) => {
   };
 };
 
+function formatMarcHuman(marc21Full: Record<string, unknown>): MarcHumanLine[] {
+  const tags = Object.keys(marc21Full)
+    .filter((tag) => /^\d{3}$/.test(tag))
+    .sort((a, b) => Number(a) - Number(b));
+
+  return tags.map((tag) => {
+    const fieldValue = marc21Full[tag] as MarcPreviewField | undefined;
+    const ind1 = (fieldValue?.ind1 ?? '#').toString().slice(0, 1) || '#';
+    const ind2 = (fieldValue?.ind2 ?? '#').toString().slice(0, 1) || '#';
+    const tokens: MarcHumanToken[] = [
+      { type: 'field', text: `${tag} ${ind1}${ind2}` }
+    ];
+
+    const subfields = fieldValue?.subfields;
+    if (subfields && typeof subfields === 'object') {
+      Object.entries(subfields).forEach(([code, value]) => {
+        const normalizedCode = code.trim().slice(0, 1).toLowerCase();
+        if (!normalizedCode) {
+          return;
+        }
+        tokens.push({ type: 'subfield', text: `$${normalizedCode}` });
+        tokens.push({ type: 'value', text: String(value ?? '') });
+      });
+    }
+
+    return { id: tag, tokens };
+  });
+}
+
 export function AdvancedCatalogWorkspace() {
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [marcRows, setMarcRows] = useState<MarcRow[]>(() => buildRowsFromForm(EMPTY_FORM));
@@ -191,6 +236,12 @@ export function AdvancedCatalogWorkspace() {
     description: form.description.trim() || undefined,
     marc21_full: preview
   }), [form, preview]);
+
+  const humanPreview = useMemo(() => formatMarcHuman(preview), [preview]);
+  const humanPreviewText = useMemo(
+    () => humanPreview.map((line) => line.tokens.map((token) => token.text).join(' ')).join('\n'),
+    [humanPreview]
+  );
 
   const syncFormFromRows = (rows: MarcRow[]) => {
     const field100 = rows.find((row) => row.tag.trim() === '100');
@@ -309,6 +360,19 @@ export function AdvancedCatalogWorkspace() {
       setToast(error instanceof Error ? error.message : 'Falha na importação por ISBN.');
     } finally {
       setLoadingLookup(false);
+    }
+  };
+
+  const copyMarc = async () => {
+    if (!humanPreviewText) {
+      setToast('Não há MARC formatado para copiar.');
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(humanPreviewText);
+      setToast('MARC formatado copiado.');
+    } catch (error) {
+      setToast(error instanceof Error ? error.message : 'Falha ao copiar MARC.');
     }
   };
 
@@ -479,21 +543,59 @@ export function AdvancedCatalogWorkspace() {
       </form>
 
       <div className="rounded-xl border bg-white p-5 shadow-sm">
-        <h3 className="text-lg font-semibold text-slate-900">MARC21 Preview</h3>
-        <p className="mt-1 text-sm text-slate-500">Atualização em tempo real com campos bibliográficos estratégicos.</p>
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h3 className="text-lg font-semibold text-slate-900">MARC21 Preview</h3>
+            <p className="mt-1 text-sm text-slate-500">Visual humano MARC21 em tempo real (principal) + JSON técnico (secundário).</p>
+          </div>
+          <button
+            className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-900"
+            onClick={copyMarc}
+            type="button"
+          >
+            Copiar MARC
+          </button>
+        </div>
 
-        <div className="mt-4 space-y-2 rounded-lg bg-slate-950 p-4 text-sm text-slate-100">
-          {Object.entries(preview).map(([tag, value]) => (
-            <div className="grid grid-cols-[3rem_1fr] gap-2" key={tag}>
-              <span className={MARC_HIGHLIGHT_TAGS.includes(tag) ? 'font-semibold text-emerald-300' : 'text-slate-400'}>{tag}:</span>
-              <span>{Array.isArray(value) ? value.join(' | ') : String(value || '—')}</span>
+        <div className="mt-4 space-y-2 rounded-lg bg-slate-950 p-4 font-mono text-sm">
+          {humanPreview.map((line) => (
+            <div className="flex flex-wrap gap-2" key={line.id}>
+              {line.tokens.map((token, index) => {
+                if (token.type === 'field') {
+                  const isHighlight = MARC_HIGHLIGHT_TAGS.includes(line.id);
+                  return (
+                    <span className={isHighlight ? 'font-semibold text-emerald-300' : 'text-emerald-400'} key={`${line.id}-${token.type}-${index}`}>
+                      {token.text}
+                    </span>
+                  );
+                }
+
+                if (token.type === 'subfield') {
+                  return (
+                    <span className="text-white" key={`${line.id}-${token.type}-${index}`}>
+                      {token.text}
+                    </span>
+                  );
+                }
+
+                return (
+                  <span className="text-slate-300" key={`${line.id}-${token.type}-${index}`}>
+                    {token.text}
+                  </span>
+                );
+              })}
             </div>
           ))}
         </div>
 
-        <pre className="mt-4 max-h-[380px] overflow-auto rounded-lg border bg-slate-50 p-3 text-xs text-slate-700">
-          {JSON.stringify(preview, null, 2)}
-        </pre>
+        <details className="mt-4 rounded-lg border border-slate-200">
+          <summary className="cursor-pointer list-none px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-600">
+            JSON Preview (secundário)
+          </summary>
+          <pre className="max-h-[280px] overflow-auto border-t bg-slate-50 p-3 text-xs text-slate-700">
+            {JSON.stringify(preview, null, 2)}
+          </pre>
+        </details>
       </div>
     </div>
   );
