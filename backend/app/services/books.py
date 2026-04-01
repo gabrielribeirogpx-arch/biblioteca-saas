@@ -5,11 +5,117 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.book import Book, BookCategory
-from app.schemas.books import BookCreate, BookOut
+from app.schemas.books import AdvancedCatalogRequest, BookCreate, BookLookupResponse, BookOut
 from app.services.standards import AACR2Validator, ISO2709Codec, MARC21Service, Z3950Gateway
 
 
 class BookService:
+    @staticmethod
+    def build_simplified_marc21_record(
+        *,
+        control_number: str,
+        title: str,
+        subtitle: str | None,
+        authors: list[str],
+        subjects: list[str],
+        isbn: str | None,
+        publisher: str | None,
+        publication_year: int | None,
+        pages: int | None,
+        edition: str | None,
+        language: str | None,
+        description: str | None,
+    ) -> dict:
+        marc_record: dict[str, object] = {
+            "001": control_number,
+            "100": authors[0] if authors else "",
+            "245": f"{title} : {subtitle}" if subtitle else title,
+            "260": ", ".join([part for part in [publisher, str(publication_year) if publication_year else None] if part]),
+            "300": str(pages) if pages else "",
+            "650": subjects,
+            "020": isbn or "",
+        }
+        if edition:
+            marc_record["250"] = edition
+        if language:
+            marc_record["041"] = language
+        if description:
+            marc_record["520"] = description
+        if len(authors) > 1:
+            marc_record["700"] = authors[1:]
+        return marc_record
+
+    @staticmethod
+    async def create_advanced_catalog_record(
+        db: AsyncSession,
+        payload: AdvancedCatalogRequest,
+        library_id: int,
+    ) -> tuple[BookOut, dict]:
+        title = payload.title.strip()
+        subtitle = payload.subtitle.strip() if payload.subtitle else None
+        isbn = payload.isbn.strip() if payload.isbn else None
+        authors = [author.strip() for author in payload.authors if author.strip()]
+        subjects = [subject.strip() for subject in payload.subjects if subject.strip()]
+
+        temporary_control_number = "pending"
+        marc21_record = BookService.build_simplified_marc21_record(
+            control_number=temporary_control_number,
+            title=title,
+            subtitle=subtitle,
+            authors=authors,
+            subjects=subjects,
+            isbn=isbn,
+            publisher=payload.publisher.strip() if payload.publisher else None,
+            publication_year=payload.publication_year,
+            pages=payload.pages,
+            edition=payload.edition.strip() if payload.edition else None,
+            language=payload.language.strip() if payload.language else None,
+            description=payload.description.strip() if payload.description else None,
+        )
+
+        book = Book(
+            library_id=library_id,
+            title=title,
+            subtitle=subtitle,
+            isbn=isbn,
+            edition=payload.edition.strip() if payload.edition else None,
+            publication_year=payload.publication_year,
+            category=BookCategory.GENERAL,
+            marc21_record=marc21_record,
+            authors=authors,
+            subjects=subjects,
+            fingerprint_isbn=MARC21Service.hash_fingerprint(isbn) if isbn else None,
+            fingerprint_title_author=MARC21Service.hash_fingerprint(f"{title}|{'|'.join(authors)}"),
+        )
+        db.add(book)
+        await db.flush()
+
+        finalized_record = {**marc21_record, "001": str(book.id)}
+        book.marc21_record = finalized_record
+
+        await db.commit()
+        await db.refresh(book)
+        return BookService._to_schema(book), finalized_record
+
+    @staticmethod
+    def lookup_by_isbn(isbn: str) -> BookLookupResponse:
+        normalized_isbn = isbn.strip()
+        suffix = normalized_isbn[-4:] if len(normalized_isbn) >= 4 else normalized_isbn
+        year = 2000 + (sum(ord(char) for char in suffix) % 25)
+        return BookLookupResponse(
+            title=f"Registro importado ISBN {suffix}",
+            subtitle="Catalogação assistida",
+            authors=["Autor Referencial"],
+            subjects=["Catalogação", "Biblioteconomia"],
+            isbn=normalized_isbn,
+            publisher="Editora Padrão ILS",
+            publication_year=year,
+            edition="1ª ed.",
+            language="pt-BR",
+            pages=240,
+            description="Registro sugerido por integração simulada de lookup por ISBN.",
+        )
+
     @staticmethod
     async def create_book(db: AsyncSession, payload: BookCreate, library_id: int) -> BookOut:
         authors = [payload.author.strip()] if payload.author.strip() else []

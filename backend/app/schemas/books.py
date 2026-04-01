@@ -33,6 +33,40 @@ class BookListResponse(BaseModel):
     total: int
 
 
+
+
+class AdvancedCatalogRequest(BaseModel):
+    title: str = Field(min_length=1, max_length=512)
+    subtitle: str | None = Field(default=None, max_length=512)
+    authors: list[str] = Field(default_factory=list)
+    subjects: list[str] = Field(default_factory=list)
+    isbn: str | None = Field(default=None, max_length=32)
+    publisher: str | None = Field(default=None, max_length=255)
+    publication_year: int | None = Field(default=None, ge=0, le=3000)
+    edition: str | None = Field(default=None, max_length=64)
+    language: str | None = Field(default=None, max_length=64)
+    pages: int | None = Field(default=None, ge=1, le=100000)
+    description: str | None = None
+
+
+class AdvancedCatalogResponse(BaseModel):
+    book: BookOut
+    marc21_record: dict[str, Any]
+
+
+class BookLookupResponse(BaseModel):
+    title: str
+    subtitle: str | None = None
+    authors: list[str] = Field(default_factory=list)
+    subjects: list[str] = Field(default_factory=list)
+    isbn: str | None = None
+    publisher: str | None = None
+    publication_year: int | None = None
+    edition: str | None = None
+    language: str | None = None
+    pages: int | None = None
+    description: str | None = None
+
 class MARC21ImportRequest(BaseModel):
     record: dict[str, Any]
     category: str = "general"
