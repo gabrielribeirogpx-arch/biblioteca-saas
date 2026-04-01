@@ -61,7 +61,15 @@ class Copy(Base):
         DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
     )
 
-    library = relationship("Library", back_populates="copies")
-    book = relationship("Book", back_populates="copies")
-    loans = relationship("Loan", back_populates="copy")
-    reservations = relationship("Reservation", back_populates="copy")
+    library = relationship(
+        "Library",
+        back_populates="copies",
+        overlaps="book,copies,loans,reservations,copy",
+    )
+    book = relationship("Book", back_populates="copies", overlaps="library,copies")
+    loans = relationship("Loan", back_populates="copy", overlaps="library,loans,user")
+    reservations = relationship(
+        "Reservation",
+        back_populates="copy",
+        overlaps="library,reservations,user",
+    )

@@ -66,6 +66,6 @@ class Fine(Base):
         DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
     )
 
-    library = relationship("Library", back_populates="fines")
-    user = relationship("User", back_populates="fines")
-    loan = relationship("Loan", back_populates="fine")
+    library = relationship("Library", back_populates="fines", overlaps="user,loan,fines")
+    user = relationship("User", back_populates="fines", overlaps="library,loan,fines")
+    loan = relationship("Loan", back_populates="fine", overlaps="library,user,fines")

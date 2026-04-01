@@ -25,16 +25,47 @@ class Library(Base):
     )
 
     organization = relationship("Organization", back_populates="libraries")
-    users = relationship("User", back_populates="library", cascade="all, delete-orphan")
-    books = relationship("Book", back_populates="library", cascade="all, delete-orphan")
-    copies = relationship("Copy", back_populates="library", cascade="all, delete-orphan")
-    loans = relationship("Loan", back_populates="library", cascade="all, delete-orphan")
-    reservations = relationship(
-        "Reservation", back_populates="library", cascade="all, delete-orphan"
+    users = relationship(
+        "User",
+        back_populates="library",
+        cascade="all, delete-orphan",
+        overlaps="loans,reservations,fines,agreements,user",
     )
-    fines = relationship("Fine", back_populates="library", cascade="all, delete-orphan")
+    books = relationship(
+        "Book",
+        back_populates="library",
+        cascade="all, delete-orphan",
+        overlaps="copies,book",
+    )
+    copies = relationship(
+        "Copy",
+        back_populates="library",
+        cascade="all, delete-orphan",
+        overlaps="book,copies,loans,reservations,copy",
+    )
+    loans = relationship(
+        "Loan",
+        back_populates="library",
+        cascade="all, delete-orphan",
+        overlaps="user,copy,loans",
+    )
+    reservations = relationship(
+        "Reservation",
+        back_populates="library",
+        cascade="all, delete-orphan",
+        overlaps="user,copy,reservations",
+    )
+    fines = relationship(
+        "Fine",
+        back_populates="library",
+        cascade="all, delete-orphan",
+        overlaps="user,loan,fines",
+    )
     agreements = relationship(
-        "Agreement", back_populates="library", cascade="all, delete-orphan"
+        "Agreement",
+        back_populates="library",
+        cascade="all, delete-orphan",
+        overlaps="user,agreements",
     )
     audit_logs = relationship(
         "AuditLog", back_populates="library", cascade="all, delete-orphan"

@@ -66,7 +66,7 @@ class Loan(Base):
         DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
     )
 
-    library = relationship("Library", back_populates="loans")
-    user = relationship("User", back_populates="loans")
-    copy = relationship("Copy", back_populates="loans")
-    fine = relationship("Fine", back_populates="loan", uselist=False)
+    library = relationship("Library", back_populates="loans", overlaps="user,copy,loans")
+    user = relationship("User", back_populates="loans", overlaps="library,copy,loans")
+    copy = relationship("Copy", back_populates="loans", overlaps="library,user,loans")
+    fine = relationship("Fine", back_populates="loan", uselist=False, overlaps="library,user,fines")

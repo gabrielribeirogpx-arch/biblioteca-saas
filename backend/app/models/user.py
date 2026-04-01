@@ -43,8 +43,16 @@ class User(Base):
         DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
     )
 
-    library = relationship("Library", back_populates="users")
-    loans = relationship("Loan", back_populates="user")
-    reservations = relationship("Reservation", back_populates="user")
-    fines = relationship("Fine", back_populates="user")
-    agreements = relationship("Agreement", back_populates="user")
+    library = relationship(
+        "Library",
+        back_populates="users",
+        overlaps="loans,reservations,fines,agreements,user",
+    )
+    loans = relationship("Loan", back_populates="user", overlaps="library,copy,loans")
+    reservations = relationship(
+        "Reservation",
+        back_populates="user",
+        overlaps="library,copy,reservations",
+    )
+    fines = relationship("Fine", back_populates="user", overlaps="library,loan,fines")
+    agreements = relationship("Agreement", back_populates="user", overlaps="library,agreements")
