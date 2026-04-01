@@ -135,13 +135,17 @@ async def get_auth_context(
     request: Request,
     credentials: HTTPAuthorizationCredentials | None = Depends(_bearer),
 ) -> AuthContext:
-    print("AUTH HEADER:", request.headers.get("Authorization"))
-    print("TENANT HEADER:", request.headers.get("X-Tenant-Slug") or request.headers.get("X-Tenant-ID"))
-
     if not credentials:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing bearer token")
 
     payload: TokenPayload = AuthService.decode_access_token(credentials.credentials)
+    tenant_slug = request.headers.get("X-Tenant-Slug") or request.headers.get("X-Tenant-ID")
+    if not tenant_slug:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Tenant header is required")
+
+    tenant_slug = tenant_slug.strip()
+    if payload.tenant != tenant_slug:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Tenant inválido")
 
     auth_context = AuthContext(
         user_id=payload.sub,
@@ -153,12 +157,25 @@ async def get_auth_context(
 
 
 async def get_current_user(
+    request: Request,
     db: AsyncSession = Depends(get_db),
     auth: AuthContext = Depends(get_auth_context),
 ):
     from app.models.user import User
 
-    user = (await db.execute(select(User).where(User.id == auth.user_id, User.library_id == auth.library_id))).scalar_one_or_none()
+    tenant_slug = (request.headers.get("X-Tenant-Slug") or request.headers.get("X-Tenant-ID") or "").strip()
+    user = (
+        await db.execute(
+            select(User)
+            .join(Library, User.library_id == Library.id)
+            .where(
+                User.id == auth.user_id,
+                User.library_id == auth.library_id,
+                Library.code == tenant_slug,
+            )
+        )
+    ).scalar_one_or_none()
+
     if not user or not user.is_active:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid authentication token")
     return user
