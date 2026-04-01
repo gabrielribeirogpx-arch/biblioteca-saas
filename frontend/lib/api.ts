@@ -101,7 +101,17 @@ export function getStoredToken(): string | null {
     return null;
   }
 
-  return window.localStorage.getItem('access_token') ?? window.localStorage.getItem('token');
+  const rawToken = window.localStorage.getItem('access_token') ?? window.localStorage.getItem('token');
+  if (!rawToken) {
+    return null;
+  }
+
+  const normalizedToken = rawToken
+    .trim()
+    .replace(/^Bearer\s+/i, '')
+    .replace(/^"(.+)"$/, '$1');
+
+  return normalizedToken || null;
 }
 
 function getApiBaseUrl(): string {
