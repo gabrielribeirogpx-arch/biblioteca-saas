@@ -68,6 +68,6 @@ class Reservation(Base):
         DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
     )
 
-    library = relationship("Library", back_populates="reservations")
-    user = relationship("User", back_populates="reservations")
-    copy = relationship("Copy", back_populates="reservations")
+    library = relationship("Library", back_populates="reservations", overlaps="user,copy,reservations")
+    user = relationship("User", back_populates="reservations", overlaps="library,copy,reservations")
+    copy = relationship("Copy", back_populates="reservations", overlaps="library,user,reservations")

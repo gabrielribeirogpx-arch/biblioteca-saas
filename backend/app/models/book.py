@@ -64,5 +64,5 @@ class Book(Base):
         DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
     )
 
-    library = relationship("Library", back_populates="books")
-    copies = relationship("Copy", back_populates="book")
+    library = relationship("Library", back_populates="books", overlaps="copies,book")
+    copies = relationship("Copy", back_populates="book", overlaps="library")

@@ -73,5 +73,5 @@ class Agreement(Base):
         DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
     )
 
-    library = relationship("Library", back_populates="agreements")
-    user = relationship("User", back_populates="agreements")
+    library = relationship("Library", back_populates="agreements", overlaps="user,agreements")
+    user = relationship("User", back_populates="agreements", overlaps="library,agreements")
