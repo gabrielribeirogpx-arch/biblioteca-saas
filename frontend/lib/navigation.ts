@@ -21,6 +21,12 @@ export const APP_NAVIGATION: NavItem[] = [
     roles: ['super_admin', 'librarian', 'assistant']
   },
   {
+    href: '/catalog/advanced',
+    label: 'Advanced Catalog',
+    description: 'Create MARC21-ready bibliographic records',
+    roles: ['super_admin', 'librarian']
+  },
+  {
     href: '/loans',
     label: 'Loans',
     description: 'Manage circulation and due dates',

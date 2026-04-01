@@ -15,6 +15,7 @@ from app.schemas.books import (
     AACR2ValidateRequest,
     AACR2ValidateResponse,
     BookCreate,
+    BookLookupResponse,
     BookListResponse,
     BookOut,
     MARC21ExportResponse,
@@ -209,3 +210,11 @@ async def lookup_z3950(
     )
 
     return Z3950LookupResponse(query=payload.query, imported_books=imported_books)
+
+
+@router.get("/lookup", response_model=BookLookupResponse, dependencies=[Depends(get_current_user)])
+async def lookup_by_isbn(
+    isbn: str,
+    _: AuthContext = Depends(require_librarian),
+) -> BookLookupResponse:
+    return BookService.lookup_by_isbn(isbn)
