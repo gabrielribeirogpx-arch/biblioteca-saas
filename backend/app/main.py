@@ -6,6 +6,7 @@ from uuid import uuid4
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from app.core.config import settings
@@ -33,20 +34,37 @@ class RequestContextLoggingMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         request_id = request.headers.get("x-request-id") or str(uuid4())
         request.state.request_id = request_id
-        response = await call_next(request)
-        tenant_context = getattr(request.state, "tenant_context", None)
-        auth_context = getattr(request.state, "auth_context", None)
-        logger.info(
-            json.dumps(
-                {
-                    "request_id": request_id,
-                    "tenant_id": getattr(tenant_context, "library_id", None),
-                    "user_id": getattr(auth_context, "user_id", None),
-                    "endpoint": f"{request.method} {request.url.path}",
-                    "status_code": response.status_code,
-                }
+        try:
+            response = await call_next(request)
+        except Exception:
+            tenant_context = getattr(request.state, "tenant_context", None)
+            auth_context = getattr(request.state, "auth_context", None)
+            logger.exception(
+                json.dumps(
+                    {
+                        "request_id": request_id,
+                        "tenant_id": getattr(tenant_context, "library_id", None),
+                        "user_id": getattr(auth_context, "user_id", None),
+                        "endpoint": f"{request.method} {request.url.path}",
+                        "status_code": 500,
+                    }
+                )
             )
-        )
+            response = JSONResponse(status_code=500, content={"detail": "Internal Server Error"})
+        else:
+            tenant_context = getattr(request.state, "tenant_context", None)
+            auth_context = getattr(request.state, "auth_context", None)
+            logger.info(
+                json.dumps(
+                    {
+                        "request_id": request_id,
+                        "tenant_id": getattr(tenant_context, "library_id", None),
+                        "user_id": getattr(auth_context, "user_id", None),
+                        "endpoint": f"{request.method} {request.url.path}",
+                        "status_code": response.status_code,
+                    }
+                )
+            )
         response.headers["x-request-id"] = request_id
         return response
 
