@@ -123,7 +123,7 @@ export async function apiFetch<T = unknown>(url: string, options: RequestInit = 
 
   if (isProtectedEndpoint && !token) {
     if (typeof window !== 'undefined') {
-      console.warn('Token ainda não disponível - abortando request');
+      console.warn('🚫 Request bloqueada - token ainda não carregado');
     }
     return null;
   }
@@ -153,11 +153,7 @@ export async function apiFetch<T = unknown>(url: string, options: RequestInit = 
 
   if (response.status === 401) {
     if (typeof window !== 'undefined') {
-      localStorage.removeItem('access_token');
-      localStorage.removeItem('token');
-      localStorage.removeItem('user_email');
-      localStorage.removeItem('tenant_id');
-      window.location.href = '/login';
+      console.warn('401 ignorado temporariamente (startup)');
     }
     return null;
   }
