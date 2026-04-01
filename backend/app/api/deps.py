@@ -9,6 +9,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 import jwt
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.core.config import settings
 from app.db.session import AsyncSessionLocal
@@ -43,9 +44,17 @@ class AuthContext:
 
 
 async def _resolve_library_from_tenant_key(db: AsyncSession, tenant_key: str) -> Library | None:
-    query = select(Library).where(Library.code == tenant_key)
+    query = (
+        select(Library)
+        .options(selectinload(Library.organization))
+        .where(Library.code == tenant_key)
+    )
     if tenant_key.isdigit():
-        query = select(Library).where((Library.code == tenant_key) | (Library.id == int(tenant_key)))
+        query = (
+            select(Library)
+            .options(selectinload(Library.organization))
+            .where((Library.code == tenant_key) | (Library.id == int(tenant_key)))
+        )
 
     library = (await db.execute(query)).scalar_one_or_none()
     if library:
@@ -58,6 +67,7 @@ async def _resolve_library_from_tenant_key(db: AsyncSession, tenant_key: str) ->
     return (
         await db.execute(
             select(Library)
+            .options(selectinload(Library.organization))
             .where(Library.organization_id == organization.id)
             .order_by(Library.id.asc())
         )
