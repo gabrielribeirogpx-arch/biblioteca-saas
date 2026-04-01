@@ -11,6 +11,7 @@ class ReservationOut(BaseModel):
     id: int
     user_id: int
     copy_id: int
+    position: int
     status: str
     reserved_at: datetime
     expires_at: datetime | None = None

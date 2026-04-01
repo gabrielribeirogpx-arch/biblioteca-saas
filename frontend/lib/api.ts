@@ -59,6 +59,7 @@ export interface Reservation {
   id: number;
   user_id: number;
   copy_id: number;
+  position: number;
   status: string;
   reserved_at: string;
   expires_at?: string | null;

@@ -11,7 +11,7 @@ from app.models.reservation import Reservation, ReservationStatus
 
 
 class ReservationService:
-    HOLD_DAYS = 2
+    HOLD_HOURS = 48
 
     @staticmethod
     async def create_reservation(db: AsyncSession, library_id: int, user_id: int, copy_id: int) -> Reservation:
@@ -21,33 +21,46 @@ class ReservationService:
         if not copy:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Copy not found")
 
+        last_position = await db.scalar(
+            select(Reservation.position)
+            .where(Reservation.library_id == library_id, Reservation.copy_id == copy_id)
+            .order_by(Reservation.position.desc())
+            .limit(1)
+        )
+
         reservation = Reservation(
             library_id=library_id,
             user_id=user_id,
             copy_id=copy_id,
-            status=ReservationStatus.QUEUED,
+            status=ReservationStatus.WAITING,
+            position=(last_position or 0) + 1,
         )
         db.add(reservation)
+        await db.flush()
         if copy.status == CopyStatus.AVAILABLE:
-            reservation.status = ReservationStatus.READY
-            reservation.expires_at = datetime.now(timezone.utc) + timedelta(days=ReservationService.HOLD_DAYS)
-            copy.status = CopyStatus.RESERVED
+            await ReservationService.fulfill_next_reservation_for_copy(db, library_id, copy_id, auto_commit=False)
 
         await db.commit()
         await db.refresh(reservation)
         return reservation
 
     @staticmethod
-    async def fulfill_next_reservation_for_copy(db: AsyncSession, library_id: int, copy_id: int) -> Reservation | None:
+    async def fulfill_next_reservation_for_copy(
+        db: AsyncSession,
+        library_id: int,
+        copy_id: int,
+        *,
+        auto_commit: bool = True,
+    ) -> Reservation | None:
         queue = (
             await db.execute(
                 select(Reservation)
                 .where(
                     Reservation.library_id == library_id,
                     Reservation.copy_id == copy_id,
-                    Reservation.status == ReservationStatus.QUEUED,
+                    Reservation.status == ReservationStatus.WAITING,
                 )
-                .order_by(Reservation.reserved_at.asc(), Reservation.id.asc())
+                .order_by(Reservation.position.asc(), Reservation.reserved_at.asc(), Reservation.id.asc())
             )
         ).scalars().first()
 
@@ -55,14 +68,15 @@ class ReservationService:
             return None
 
         queue.status = ReservationStatus.READY
-        queue.expires_at = datetime.now(timezone.utc) + timedelta(days=ReservationService.HOLD_DAYS)
+        queue.expires_at = datetime.now(timezone.utc) + timedelta(hours=ReservationService.HOLD_HOURS)
         copy = (
             await db.execute(select(Copy).where(Copy.library_id == library_id, Copy.id == copy_id))
         ).scalar_one_or_none()
         if copy:
             copy.status = CopyStatus.RESERVED
 
-        await db.commit()
+        if auto_commit:
+            await db.commit()
         await db.refresh(queue)
         return queue
 
@@ -82,7 +96,34 @@ class ReservationService:
 
         for reservation in reservations:
             reservation.status = ReservationStatus.EXPIRED
+            reservation.expires_at = now
+            await ReservationService.fulfill_next_reservation_for_copy(
+                db,
+                library_id,
+                reservation.copy_id,
+                auto_commit=False,
+            )
 
         if reservations:
             await db.commit()
         return len(reservations)
+
+    @staticmethod
+    async def process_queue(db: AsyncSession, library_id: int) -> int:
+        processed = await ReservationService.expire_ready_reservations(db, library_id)
+        available_copies = (
+            await db.execute(select(Copy).where(Copy.library_id == library_id, Copy.status == CopyStatus.AVAILABLE))
+        ).scalars().all()
+
+        for copy in available_copies:
+            promoted = await ReservationService.fulfill_next_reservation_for_copy(
+                db,
+                library_id,
+                copy.id,
+                auto_commit=False,
+            )
+            if promoted:
+                processed += 1
+
+        await db.commit()
+        return processed

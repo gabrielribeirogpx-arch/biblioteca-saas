@@ -18,10 +18,9 @@ from app.models.base import Base
 
 
 class ReservationStatus(str, enum.Enum):
-    QUEUED = "queued"
+    WAITING = "waiting"
     READY = "ready"
-    FULFILLED = "fulfilled"
-    CANCELED = "canceled"
+    CANCELLED = "cancelled"
     EXPIRED = "expired"
 
 
@@ -54,8 +53,9 @@ class Reservation(Base):
     status: Mapped[ReservationStatus] = mapped_column(
         Enum(ReservationStatus, name="reservation_status", native_enum=True),
         nullable=False,
-        default=ReservationStatus.QUEUED,
+        default=ReservationStatus.WAITING,
     )
+    position: Mapped[int] = mapped_column(nullable=False, default=1)
     reserved_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
