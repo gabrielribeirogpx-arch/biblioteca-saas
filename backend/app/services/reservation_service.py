@@ -7,6 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.copy import Copy, CopyStatus
+from app.models.library import Library
 from app.models.reservation import Reservation, ReservationStatus
 
 
@@ -15,6 +16,7 @@ class ReservationService:
 
     @staticmethod
     async def create_reservation(db: AsyncSession, library_id: int, user_id: int, copy_id: int) -> Reservation:
+        library = (await db.execute(select(Library).where(Library.id == library_id))).scalar_one_or_none()
         copy = (
             await db.execute(select(Copy).where(Copy.library_id == library_id, Copy.id == copy_id))
         ).scalar_one_or_none()
@@ -29,6 +31,7 @@ class ReservationService:
         )
 
         reservation = Reservation(
+            tenant_id=library.tenant_id if library else None,
             library_id=library_id,
             user_id=user_id,
             copy_id=copy_id,

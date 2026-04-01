@@ -21,12 +21,15 @@ async def login(
         or request.headers.get("X-Tenant-Slug")
         or body.tenant
     )
+    library_id = request.headers.get("X-Library-ID")
     if not tenant or not tenant.strip():
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Tenant obrigatório")
 
     tenant = tenant.strip()
-    print("TENANT RECEBIDO:", tenant)
-    library = (await db.execute(select(Library).where(Library.code == tenant))).scalar_one_or_none()
+    query = select(Library).where(Library.code == tenant)
+    if library_id and library_id.strip().isdigit():
+        query = select(Library).where(Library.id == int(library_id.strip()))
+    library = (await db.execute(query)).scalar_one_or_none()
 
     if not library:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Tenant não encontrado")

@@ -144,6 +144,13 @@ export function getStoredTenantId(): string {
   );
 }
 
+export function getStoredLibraryId(): string | null {
+  if (typeof window === 'undefined') {
+    return null;
+  }
+  return window.localStorage.getItem('library_id');
+}
+
 export function setStoredTenantId(tenantId: string) {
   if (typeof window === 'undefined') {
     return;
@@ -151,6 +158,13 @@ export function setStoredTenantId(tenantId: string) {
 
   window.localStorage.setItem('tenant', tenantId);
   window.localStorage.setItem('tenant_id', tenantId);
+}
+
+export function setStoredLibraryId(libraryId: string) {
+  if (typeof window === 'undefined') {
+    return;
+  }
+  window.localStorage.setItem('library_id', libraryId);
 }
 
 export function getStoredToken(): string | null {
@@ -200,6 +214,7 @@ function buildUrl(baseUrl: string, endpoint: string): string {
 export async function apiFetch<T = unknown>(url: string, options: RequestInit = {}): Promise<T | null> {
   const token = getStoredToken();
   const tenant = getStoredTenantId();
+  const libraryId = getStoredLibraryId();
   const isProtectedEndpoint = url.startsWith('/api/v1/') && !url.startsWith('/api/v1/auth/login');
 
   if (isProtectedEndpoint && !token) {
@@ -221,6 +236,9 @@ export async function apiFetch<T = unknown>(url: string, options: RequestInit = 
     }
     if (!headers.has('X-Tenant-Slug')) {
       headers.set('X-Tenant-Slug', tenant);
+    }
+    if (libraryId && !headers.has('X-Library-ID')) {
+      headers.set('X-Library-ID', libraryId);
     }
   }
 

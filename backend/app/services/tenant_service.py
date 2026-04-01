@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.library import Library
 from app.models.organization import Organization
+from app.models.tenant import Tenant
 from app.models.user import User, UserRole
 from app.schemas.auth import RegisterRequest, RegisterResponse, TokenPayload
 from app.schemas.tenants import TenantCreate
@@ -91,11 +92,18 @@ class TenantService:
         if existing:
             return existing
 
+        default_tenant = (await db.execute(select(Tenant).where(Tenant.slug == DEFAULT_ORGANIZATION_SLUG))).scalar_one_or_none()
+        if default_tenant is None:
+            default_tenant = Tenant(name=DEFAULT_ORGANIZATION_NAME, slug=DEFAULT_ORGANIZATION_SLUG)
+            db.add(default_tenant)
+            await db.flush()
+
         tenant = Library(
             name="Default",
             code=DEFAULT_TENANT_CODE,
             timezone="UTC",
             organization_id=default_organization.id,
+            tenant_id=default_tenant.id,
         )
         db.add(tenant)
         await db.commit()
@@ -114,6 +122,7 @@ class TenantService:
             return existing
 
         admin = User(
+            tenant_id=tenant.tenant_id,
             library_id=tenant.id,
             email=admin_email,
             full_name="Admin",
@@ -143,7 +152,19 @@ class TenantService:
         if existing:
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Tenant slug already exists")
 
-        tenant = Library(name=name, code=slug, timezone="UTC", organization_id=default_organization.id)
+        tenant_record = (await db.execute(select(Tenant).where(Tenant.slug == slug))).scalar_one_or_none()
+        if tenant_record is None:
+            tenant_record = Tenant(name=name, slug=slug)
+            db.add(tenant_record)
+            await db.flush()
+
+        tenant = Library(
+            name=name,
+            code=slug,
+            timezone="UTC",
+            organization_id=default_organization.id,
+            tenant_id=tenant_record.id,
+        )
         db.add(tenant)
         await db.commit()
         await db.refresh(tenant)
@@ -171,12 +192,19 @@ class TenantService:
         if existing_tenant:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Slug already exists")
 
+        tenant_record = (await db.execute(select(Tenant).where(Tenant.slug == tenant_slug))).scalar_one_or_none()
+        if tenant_record is None:
+            tenant_record = Tenant(name=tenant_name, slug=tenant_slug)
+            db.add(tenant_record)
+            await db.flush()
+
         try:
             tenant = Library(
                 name=tenant_name,
                 code=tenant_slug,
                 timezone="UTC",
                 organization_id=default_organization.id,
+                tenant_id=tenant_record.id,
             )
             db.add(tenant)
             await db.flush()
@@ -187,6 +215,7 @@ class TenantService:
                 raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Email already registered")
 
             admin_user = User(
+                tenant_id=tenant.tenant_id,
                 library_id=tenant.id,
                 email=email,
                 full_name=tenant_name,
@@ -203,6 +232,7 @@ class TenantService:
                 TokenPayload(
                     sub=admin_user.id,
                     role=admin_user.role,
+                    tenant_id=tenant.tenant_id or tenant.organization_id,
                     library_id=tenant.id,
                     tenant=tenant.code,
                     organization_id=tenant.organization_id,

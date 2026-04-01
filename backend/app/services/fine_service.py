@@ -7,6 +7,7 @@ from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.fine import Fine, FineStatus
+from app.models.library import Library
 from app.models.loan import Loan, LoanStatus
 
 
@@ -16,6 +17,7 @@ class FineService:
     @staticmethod
     async def assess_overdue_fines(db: AsyncSession, library_id: int) -> int:
         now = datetime.now(timezone.utc)
+        library = (await db.execute(select(Library).where(Library.id == library_id))).scalar_one_or_none()
         overdue_loans = (
             await db.execute(
                 select(Loan).where(
@@ -42,6 +44,7 @@ class FineService:
             else:
                 db.add(
                     Fine(
+                        tenant_id=library.tenant_id if library else None,
                         library_id=library_id,
                         user_id=loan.user_id,
                         loan_id=loan.id,

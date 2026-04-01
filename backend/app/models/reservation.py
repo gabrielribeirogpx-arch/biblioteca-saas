@@ -44,6 +44,9 @@ class Reservation(Base):
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    tenant_id: Mapped[int | None] = mapped_column(
+        ForeignKey("tenants.id", ondelete="RESTRICT"), nullable=True, index=True
+    )
     library_id: Mapped[int] = mapped_column(
         ForeignKey("libraries.id", ondelete="CASCADE"), nullable=False, index=True
     )
