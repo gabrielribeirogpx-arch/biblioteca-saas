@@ -14,6 +14,25 @@ from app.services.standards import AACR2Validator, ISO2709Codec, MARC21Service, 
 
 class BookService:
     @staticmethod
+    def _normalize_string_list(value: object) -> list[str]:
+        if value is None:
+            return []
+        if isinstance(value, list):
+            return [str(item).strip() for item in value if str(item).strip()]
+        if isinstance(value, tuple):
+            return [str(item).strip() for item in value if str(item).strip()]
+        text_value = str(value).strip()
+        return [text_value] if text_value else []
+
+    @staticmethod
+    def _normalize_marc21_record(value: object) -> dict:
+        if value is None:
+            return {}
+        if isinstance(value, dict):
+            return value
+        return {"legacy_payload": value}
+
+    @staticmethod
     def _extract_subfield_value(record: dict, tag: str, code: str) -> str:
         field = record.get(tag)
         if isinstance(field, dict):
@@ -341,7 +360,7 @@ class BookService:
             isbn=book.isbn,
             edition=book.edition,
             publication_year=book.publication_year,
-            authors=book.authors,
-            subjects=book.subjects,
-            marc21_record=book.marc21_record,
+            authors=BookService._normalize_string_list(book.authors),
+            subjects=BookService._normalize_string_list(book.subjects),
+            marc21_record=BookService._normalize_marc21_record(book.marc21_record),
         )
