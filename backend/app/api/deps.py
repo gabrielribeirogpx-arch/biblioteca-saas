@@ -8,6 +8,8 @@ from fastapi import Depends, Header, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 import jwt
 from sqlalchemy import select
+from sqlalchemy import text
+from sqlalchemy.exc import ProgrammingError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -45,19 +47,31 @@ class AuthContext:
 
 
 async def _resolve_library_from_tenant_key(db: AsyncSession, tenant_key: str) -> Library | None:
-    query = (
-        select(Library)
-        .options(selectinload(Library.organization))
-        .where(Library.code == tenant_key)
-    )
-    if tenant_key.isdigit():
-        query = (
+    def _build_query():
+        base_query = (
             select(Library)
             .options(selectinload(Library.organization))
-            .where((Library.code == tenant_key) | (Library.id == int(tenant_key)))
+            .where(Library.code == tenant_key)
         )
+        if tenant_key.isdigit():
+            return (
+                select(Library)
+                .options(selectinload(Library.organization))
+                .where((Library.code == tenant_key) | (Library.id == int(tenant_key)))
+            )
+        return base_query
 
-    library = (await db.execute(query)).scalar_one_or_none()
+    try:
+        library = (await db.execute(_build_query())).scalar_one_or_none()
+    except ProgrammingError as exc:
+        error_message = str(getattr(exc, "orig", exc)).lower()
+        if "libraries.is_active" not in error_message and "is_active" not in error_message:
+            raise
+        await db.rollback()
+        await db.execute(text("ALTER TABLE libraries ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT TRUE"))
+        await db.commit()
+        library = (await db.execute(_build_query())).scalar_one_or_none()
+
     if library:
         return library
 
