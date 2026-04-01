@@ -5,7 +5,8 @@ import { useEffect, useState } from 'react';
 import { ProtectedRoute } from '../../components/auth/ProtectedRoute';
 import { AppShell } from '../../components/ui/AppShell';
 import { DataTable } from '../../components/ui/DataTable';
-import { apiFetch, getStoredToken, type Book } from '../../lib/api';
+import { useAuth } from '../../hooks/useAuth';
+import { apiFetch, type Book } from '../../lib/api';
 
 interface CatalogRow {
   [key: string]: string | number | null | undefined;
@@ -18,11 +19,11 @@ interface CatalogRow {
 export default function CatalogPage() {
   const role = 'librarian';
   const [rows, setRows] = useState<CatalogRow[]>([]);
+  const { token, loading } = useAuth();
 
   useEffect(() => {
     let isMounted = true;
-    const token = getStoredToken();
-    if (!token) {
+    if (loading || !token) {
       return;
     }
 
@@ -49,7 +50,7 @@ export default function CatalogPage() {
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [loading, token]);
 
   return (
     <ProtectedRoute>

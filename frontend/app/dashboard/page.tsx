@@ -6,7 +6,8 @@ import { useEffect, useState } from 'react';
 import { ProtectedRoute } from '../../components/auth/ProtectedRoute';
 import { AppShell } from '../../components/ui/AppShell';
 import { MetricCard } from '../../components/ui/MetricCard';
-import { apiFetch, getStoredToken, type Book, type Copy, type Loan, type UserRole } from '../../lib/api';
+import { useAuth } from '../../hooks/useAuth';
+import { apiFetch, type Book, type Copy, type Loan, type UserRole } from '../../lib/api';
 
 type CollectionPayload<T> =
   | T[]
@@ -64,25 +65,16 @@ export default function DashboardPage() {
     loading: true,
     error: null
   });
-  const [ready, setReady] = useState(false);
-  const [token, setToken] = useState<string | null>(null);
+  const { token, loading } = useAuth();
 
   useEffect(() => {
-    const storedToken = localStorage.getItem('access_token') ?? localStorage.getItem('token');
-
-    console.log('Token carregado:', storedToken);
-
-    if (!storedToken) {
+    if (!loading && !token) {
       router.push('/login');
-      return;
     }
-
-    setToken(storedToken);
-    setReady(true);
-  }, [router]);
+  }, [loading, token, router]);
 
   useEffect(() => {
-    if (!ready || !token) {
+    if (loading || !token) {
       return;
     }
 
@@ -90,14 +82,6 @@ export default function DashboardPage() {
 
     async function fetchDashboardData() {
       setState({ books: null, copies: null, loans: null, loading: true, error: null });
-
-      const storedToken = getStoredToken();
-      if (!storedToken) {
-        if (isMounted) {
-          setState({ books: null, copies: null, loans: null, loading: false, error: null });
-        }
-        return;
-      }
 
       const books = await apiFetch<CollectionPayload<Book>>('/api/v1/books/');
 
@@ -120,14 +104,18 @@ export default function DashboardPage() {
     return () => {
       isMounted = false;
     };
-  }, [ready, token]);
+  }, [loading, token]);
 
   const totalBooks = getCollectionTotal<Book>(state.books);
   const totalCopies = getCollectionTotal<Copy>(state.copies);
   const activeLoans = getCollectionTotal<Loan>(state.loans);
 
-  if (!ready) {
+  if (loading) {
     return <div>Carregando autenticação...</div>;
+  }
+
+  if (!token) {
+    return null;
   }
 
   return (

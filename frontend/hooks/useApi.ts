@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from 'react';
 
-import { apiFetch, getStoredToken } from '../lib/api';
+import { useAuth } from './useAuth';
+import { apiFetch } from '../lib/api';
 
 interface UseApiState<T> {
   data: T | null;
@@ -11,6 +12,7 @@ interface UseApiState<T> {
 }
 
 export function useApi<T>(endpoint: string) {
+  const { token, loading: authLoading } = useAuth();
   const [state, setState] = useState<UseApiState<T>>({
     data: null,
     loading: true,
@@ -23,7 +25,10 @@ export function useApi<T>(endpoint: string) {
     async function fetchData() {
       setState({ data: null, loading: true, error: null });
 
-      const token = getStoredToken();
+      if (authLoading) {
+        return;
+      }
+
       if (!token && endpoint.startsWith('/api/v1/')) {
         if (isMounted) {
           setState({ data: null, loading: false, error: null });
@@ -52,7 +57,7 @@ export function useApi<T>(endpoint: string) {
     return () => {
       isMounted = false;
     };
-  }, [endpoint]);
+  }, [endpoint, authLoading, token]);
 
   return state;
 }

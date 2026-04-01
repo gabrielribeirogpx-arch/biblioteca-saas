@@ -5,7 +5,8 @@ import { useEffect, useState } from 'react';
 import { ProtectedRoute } from '../../components/auth/ProtectedRoute';
 import { AppShell } from '../../components/ui/AppShell';
 import { DataTable } from '../../components/ui/DataTable';
-import { apiFetch, getStoredToken, type Loan } from '../../lib/api';
+import { useAuth } from '../../hooks/useAuth';
+import { apiFetch, type Loan } from '../../lib/api';
 
 interface LoanRow {
   [key: string]: string | number | null | undefined;
@@ -19,11 +20,11 @@ interface LoanRow {
 export default function LoansPage() {
   const role = 'librarian';
   const [rows, setRows] = useState<LoanRow[]>([]);
+  const { token, loading } = useAuth();
 
   useEffect(() => {
     let isMounted = true;
-    const token = getStoredToken();
-    if (!token) {
+    if (loading || !token) {
       return;
     }
 
@@ -51,7 +52,7 @@ export default function LoansPage() {
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [loading, token]);
 
   return (
     <ProtectedRoute>

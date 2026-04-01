@@ -6,7 +6,8 @@ import { ProtectedRoute } from '../../components/auth/ProtectedRoute';
 import { AppShell } from '../../components/ui/AppShell';
 import { DataTable } from '../../components/ui/DataTable';
 import { MetricCard } from '../../components/ui/MetricCard';
-import { apiFetch, getStoredToken, type MostBorrowedItem, type OverdueItem } from '../../lib/api';
+import { useAuth } from '../../hooks/useAuth';
+import { apiFetch, type MostBorrowedItem, type OverdueItem } from '../../lib/api';
 
 interface MostBorrowedRow {
   [key: string]: string | number | null | undefined;
@@ -24,6 +25,7 @@ interface OverdueRow {
 
 export default function ReportsPage() {
   const role = 'librarian';
+  const { token, loading } = useAuth();
   const [reportData, setReportData] = useState<{ mostBorrowed: MostBorrowedRow[]; overdue: OverdueRow[] }>({
     mostBorrowed: [],
     overdue: []
@@ -31,8 +33,7 @@ export default function ReportsPage() {
 
   useEffect(() => {
     let isMounted = true;
-    const token = getStoredToken();
-    if (!token) {
+    if (loading || !token) {
       return;
     }
 
@@ -66,7 +67,7 @@ export default function ReportsPage() {
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [loading, token]);
 
   return (
     <ProtectedRoute>
