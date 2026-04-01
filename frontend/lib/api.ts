@@ -150,10 +150,10 @@ export function getStoredToken(): string | null {
 }
 
 function getApiBaseUrl(): string {
-  const configuredBaseUrl = process.env.NEXT_PUBLIC_API_URL ?? DEFAULT_API_URL;
+  const configuredBaseUrl = (process.env.NEXT_PUBLIC_API_URL ?? DEFAULT_API_URL).trim();
 
-  if (typeof window !== 'undefined' && window.location.protocol === 'https:' && configuredBaseUrl.startsWith('http://')) {
-    return configuredBaseUrl.replace(/^http:\/\//i, 'https://');
+  if (typeof window !== 'undefined' && window.location.protocol === 'https:') {
+    return configuredBaseUrl.replace(/^http:/i, 'https:');
   }
 
   return configuredBaseUrl;
