@@ -35,6 +35,7 @@ class AuthService:
                 "sub": payload.sub,
                 "role": payload.role.value,
                 "library_id": payload.library_id,
+                "tenant": payload.tenant,
                 "exp": exp,
             },
             settings.JWT_SECRET_KEY,
@@ -54,6 +55,7 @@ class AuthService:
                 sub=int(decoded["sub"]),
                 role=decoded["role"],
                 library_id=int(decoded["library_id"]),
+                tenant=str(decoded["tenant"]),
             )
         except (jwt.InvalidTokenError, KeyError, ValueError) as exc:
             raise HTTPException(
@@ -112,7 +114,12 @@ class AuthService:
             )
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Credenciais inválidas")
 
-        token_payload = TokenPayload(sub=user.id, role=user.role, library_id=tenant.id)
+        token_payload = TokenPayload(
+            sub=user.id,
+            role=user.role,
+            library_id=tenant.id,
+            tenant=tenant.code,
+        )
         access_token = AuthService.create_access_token(token_payload)
 
         await AuditService.log_event(

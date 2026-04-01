@@ -13,6 +13,7 @@ class TokenPayload(BaseModel):
     sub: int
     role: UserRole
     library_id: int
+    tenant: str
 
 
 class TokenResponse(BaseModel):

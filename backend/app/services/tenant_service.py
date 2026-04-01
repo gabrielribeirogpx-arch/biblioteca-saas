@@ -152,7 +152,12 @@ class TenantService:
             await db.commit()
 
             token = AuthService.create_access_token(
-                TokenPayload(sub=admin_user.id, role=admin_user.role, library_id=tenant.id)
+                TokenPayload(
+                    sub=admin_user.id,
+                    role=admin_user.role,
+                    library_id=tenant.id,
+                    tenant=tenant.code,
+                )
             )
             return RegisterResponse(success=True, tenant_slug=tenant_slug, token=token)
         except HTTPException:
