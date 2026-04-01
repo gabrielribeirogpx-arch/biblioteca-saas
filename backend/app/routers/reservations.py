@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy import String, func, select
+from sqlalchemy.exc import ProgrammingError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import AuthContext, TenantScopedContext, get_db, get_tenant_context, require_librarian, require_user
@@ -26,6 +27,13 @@ def _normalize_reservation_status(raw_status: str | ReservationStatus | None) ->
         "fulfilled": ReservationStatus.EXPIRED.value,
     }
     return legacy_status_map.get(normalized, normalized)
+
+
+def _is_missing_position_column_error(exc: ProgrammingError) -> bool:
+    error_message = str(getattr(exc, "orig", exc)).lower()
+    return "position" in error_message and (
+        "undefinedcolumn" in error_message or "does not exist" in error_message
+    )
 
 
 @router.post('/', response_model=ReservationOut)
@@ -73,25 +81,54 @@ async def list_reservations(
     offset = (page - 1) * page_size
     total = await db.scalar(select(func.count()).select_from(Reservation).where(Reservation.library_id == ctx.tenant.library_id))
     reservation_table = Reservation.__table__
-    result = await db.execute(
-        select(
-            reservation_table.c.id,
-            reservation_table.c.user_id,
-            reservation_table.c.copy_id,
-            reservation_table.c.position,
-            reservation_table.c.status.cast(String).label("status"),
-            reservation_table.c.reserved_at,
-            reservation_table.c.expires_at,
+    try:
+        result = await db.execute(
+            select(
+                reservation_table.c.id,
+                reservation_table.c.user_id,
+                reservation_table.c.copy_id,
+                reservation_table.c.position,
+                reservation_table.c.status.cast(String).label("status"),
+                reservation_table.c.reserved_at,
+                reservation_table.c.expires_at,
+            )
+            .where(reservation_table.c.library_id == ctx.tenant.library_id)
+            .order_by(
+                reservation_table.c.copy_id.asc(),
+                reservation_table.c.position.asc(),
+                reservation_table.c.id.asc(),
+            )
+            .offset(offset)
+            .limit(page_size)
         )
-        .where(reservation_table.c.library_id == ctx.tenant.library_id)
-        .order_by(
-            reservation_table.c.copy_id.asc(),
-            reservation_table.c.position.asc(),
-            reservation_table.c.id.asc(),
+    except ProgrammingError as exc:
+        if not _is_missing_position_column_error(exc):
+            raise
+
+        await db.rollback()
+        computed_position = func.row_number().over(
+            partition_by=reservation_table.c.copy_id,
+            order_by=(reservation_table.c.reserved_at.asc(), reservation_table.c.id.asc()),
         )
-        .offset(offset)
-        .limit(page_size)
-    )
+        result = await db.execute(
+            select(
+                reservation_table.c.id,
+                reservation_table.c.user_id,
+                reservation_table.c.copy_id,
+                computed_position.label("position"),
+                reservation_table.c.status.cast(String).label("status"),
+                reservation_table.c.reserved_at,
+                reservation_table.c.expires_at,
+            )
+            .where(reservation_table.c.library_id == ctx.tenant.library_id)
+            .order_by(
+                reservation_table.c.copy_id.asc(),
+                reservation_table.c.reserved_at.asc(),
+                reservation_table.c.id.asc(),
+            )
+            .offset(offset)
+            .limit(page_size)
+        )
     items = [
         ReservationOut(
             id=record.id,
