@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from sqlalchemy import DateTime, ForeignKey, String, UniqueConstraint, func
+from sqlalchemy import Boolean, DateTime, ForeignKey, String, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base
@@ -20,6 +20,7 @@ class Library(Base):
     name: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
     code: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
     timezone: Mapped[str] = mapped_column(String(64), nullable=False, default="UTC")
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default="true")
 
     created_at: Mapped[DateTime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
@@ -76,3 +77,4 @@ class Library(Base):
         "AuditLog", back_populates="library", cascade="all, delete-orphan"
     )
     sections = relationship("Section", back_populates="library", cascade="all, delete-orphan")
+    policy = relationship("LibraryPolicy", back_populates="library", uselist=False, cascade="all, delete-orphan")

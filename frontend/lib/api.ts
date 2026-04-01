@@ -39,12 +39,30 @@ export interface LibraryOption {
   id: number;
   code: string;
   name: string;
+  tenant_id: number;
   organization_id: number;
+  is_active: boolean;
+  created_at: string;
 }
 
 export interface LibraryCreateInput {
   name: string;
   code: string;
+  is_active: boolean;
+}
+
+export interface LibraryUpdateInput {
+  name?: string;
+  code?: string;
+  is_active?: boolean;
+}
+
+export interface LibraryPolicy {
+  library_id: number;
+  max_loans: number;
+  loan_days: number;
+  fine_per_day: string;
+  renewal_limit: number;
 }
 
 export interface ReportSummary {
@@ -317,6 +335,30 @@ export async function getLibraries(): Promise<LibraryOption[]> {
 export async function createLibrary(payload: LibraryCreateInput): Promise<LibraryOption | null> {
   return await apiFetch<LibraryOption>('/api/v1/libraries', {
     method: 'POST',
+    body: JSON.stringify(payload)
+  });
+}
+
+export async function updateLibrary(libraryId: number, payload: LibraryUpdateInput): Promise<LibraryOption | null> {
+  return await apiFetch<LibraryOption>(`/api/v1/libraries/${libraryId}`, {
+    method: 'PUT',
+    body: JSON.stringify(payload)
+  });
+}
+
+export async function deleteLibrary(libraryId: number): Promise<void> {
+  await apiFetch(`/api/v1/libraries/${libraryId}`, {
+    method: 'DELETE'
+  });
+}
+
+export async function getLibraryPolicy(libraryId: number): Promise<LibraryPolicy | null> {
+  return await apiFetch<LibraryPolicy>(`/api/v1/libraries/${libraryId}/policy`);
+}
+
+export async function updateLibraryPolicy(libraryId: number, payload: Omit<LibraryPolicy, 'library_id'>): Promise<LibraryPolicy | null> {
+  return await apiFetch<LibraryPolicy>(`/api/v1/libraries/${libraryId}/policy`, {
+    method: 'PUT',
     body: JSON.stringify(payload)
   });
 }
