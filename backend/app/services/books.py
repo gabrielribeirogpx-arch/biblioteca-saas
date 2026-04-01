@@ -244,11 +244,41 @@ class BookService:
         offset = (page - 1) * page_size
         total = await db.scalar(select(func.count()).select_from(Book).where(Book.library_id == library_id))
         result = await db.execute(
-            select(Book).where(Book.library_id == library_id).order_by(Book.id.asc()).offset(offset).limit(page_size)
+            select(
+                Book.id,
+                Book.library_id,
+                Book.title,
+                Book.subtitle,
+                Book.isbn,
+                Book.edition,
+                Book.publication_year,
+                Book.authors,
+                Book.subjects,
+                Book.marc21_record,
+            )
+            .where(Book.library_id == library_id)
+            .order_by(Book.id.asc())
+            .offset(offset)
+            .limit(page_size)
         )
-        books = result.scalars().all()
+        rows = result.all()
+        books = [
+            BookOut(
+                id=row.id,
+                library_id=row.library_id,
+                title=row.title,
+                subtitle=row.subtitle,
+                isbn=row.isbn,
+                edition=row.edition,
+                publication_year=row.publication_year,
+                authors=BookService._normalize_string_list(row.authors),
+                subjects=BookService._normalize_string_list(row.subjects),
+                marc21_record=BookService._normalize_marc21_record(row.marc21_record),
+            )
+            for row in rows
+        ]
         return {
-            "items": [BookService._to_schema(book) for book in books],
+            "items": books,
             "page": page,
             "page_size": page_size,
             "total": total or 0,
