@@ -64,15 +64,22 @@ export default function DashboardPage() {
     loading: true,
     error: null
   });
+  const [ready, setReady] = useState(false);
 
   useEffect(() => {
     const token = localStorage.getItem('access_token') ?? localStorage.getItem('token');
     if (!token) {
       router.push('/login');
+      return;
     }
+    setReady(true);
   }, [router]);
 
   useEffect(() => {
+    if (!ready) {
+      return;
+    }
+
     let isMounted = true;
 
     async function fetchDashboardData() {
@@ -107,11 +114,15 @@ export default function DashboardPage() {
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [ready]);
 
   const totalBooks = getCollectionTotal<Book>(state.books);
   const totalCopies = getCollectionTotal<Copy>(state.copies);
   const activeLoans = getCollectionTotal<Loan>(state.loans);
+
+  if (!ready) {
+    return <div>Carregando...</div>;
+  }
 
   return (
     <ProtectedRoute>

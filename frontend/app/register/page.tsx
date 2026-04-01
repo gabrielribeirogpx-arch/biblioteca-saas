@@ -1,43 +1,14 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { FormEvent, useMemo, useState } from 'react';
+import { FormEvent, useState } from 'react';
 
-import { setStoredTenantId } from '../../lib/api';
+import { apiFetch, setStoredTenantId } from '../../lib/api';
 
 interface RegisterResponse {
   success: boolean;
   tenant_slug: string;
   token?: string | null;
-}
-
-interface ApiErrorDetail {
-  detail?: string | Array<{ loc?: Array<string | number>; msg?: string }>;
-}
-
-function extractApiErrorMessage(errorBody: ApiErrorDetail | null): string {
-  if (!errorBody?.detail) {
-    return 'Falha no cadastro';
-  }
-
-  if (typeof errorBody.detail === 'string') {
-    return errorBody.detail;
-  }
-
-  if (Array.isArray(errorBody.detail) && errorBody.detail.length > 0) {
-    return errorBody.detail
-      .map((item) => {
-        const field = item.loc?.at(-1);
-        if (field && item.msg) {
-          return `${String(field)}: ${item.msg}`;
-        }
-
-        return item.msg ?? 'Dados inválidos';
-      })
-      .join('; ');
-  }
-
-  return 'Falha no cadastro';
 }
 
 function slugifyName(value: string): string {
@@ -62,28 +33,19 @@ export default function RegisterPage() {
   const [slugAvailable, setSlugAvailable] = useState<boolean | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const apiUrl = useMemo(() => process.env.NEXT_PUBLIC_API_URL, []);
-
   async function checkSlugAvailability(slugCandidate: string) {
-    if (!apiUrl || !slugCandidate) {
+    if (!slugCandidate) {
       setSlugAvailable(null);
       return;
     }
 
     setCheckingSlug(true);
     try {
-      const response = await fetch(
-        `${apiUrl}/api/public/slug-availability?slug=${encodeURIComponent(slugCandidate)}`,
+      const data = await apiFetch<{ available?: boolean }>(
+        `/api/public/slug-availability?slug=${encodeURIComponent(slugCandidate)}`,
         { cache: 'no-store' }
       );
-
-      if (!response.ok) {
-        setSlugAvailable(null);
-        return;
-      }
-
-      const data = (await response.json()) as { available?: boolean };
-      setSlugAvailable(Boolean(data.available));
+      setSlugAvailable(Boolean(data?.available));
     } catch {
       setSlugAvailable(null);
     } finally {
@@ -106,30 +68,15 @@ export default function RegisterPage() {
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!apiUrl) {
-      setError('NEXT_PUBLIC_API_URL não configurada');
-      return;
-    }
-
     setError(null);
     setLoading(true);
 
     try {
-      const response = await fetch(`${apiUrl}/api/public/register`, {
+      const data = await apiFetch<RegisterResponse>('/api/public/register', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
         body: JSON.stringify({ name, slug, email, password })
       });
-
-      if (!response.ok) {
-        const errorBody = (await response.json().catch(() => null)) as ApiErrorDetail | null;
-        throw new Error(extractApiErrorMessage(errorBody));
-      }
-
-      const data = (await response.json()) as RegisterResponse;
-      if (!data.success) {
+      if (!data?.success) {
         throw new Error('Cadastro não concluído');
       }
 

@@ -2,7 +2,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 
-import { getStoredTenantId, setStoredTenantId } from '../lib/api';
+import { apiFetch, getStoredTenantId, setStoredTenantId } from '../lib/api';
 
 interface AuthUser {
   email: string;
@@ -46,24 +46,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
     const sanitizedEmail = email.trim();
     const sanitizedPassword = password;
-    const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL ?? '';
-
-    const response = await fetch(`${apiBaseUrl}/api/v1/auth/login?tenant=${encodeURIComponent(resolvedTenantId)}`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Tenant-ID': resolvedTenantId
-      },
-      body: JSON.stringify({ email: sanitizedEmail, password: sanitizedPassword })
-    });
-
-    if (!response.ok) {
+    let data: { access_token?: string } | null = null;
+    try {
+      data = await apiFetch<{ access_token?: string }>(`/api/v1/auth/login?tenant=${encodeURIComponent(resolvedTenantId)}`, {
+        method: 'POST',
+        headers: {
+          'X-Tenant-ID': resolvedTenantId
+        },
+        body: JSON.stringify({ email: sanitizedEmail, password: sanitizedPassword })
+      });
+    } catch {
       throw new Error('Credenciais inválidas');
     }
 
-    const data = (await response.json()) as { access_token?: string };
-
-    if (!data.access_token) {
+    if (!data?.access_token) {
       throw new Error('Token de acesso não retornado pela API');
     }
 
