@@ -2,7 +2,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 
-import { apiFetch, getStoredTenantId, setStoredTenantId } from '../lib/api';
+import { apiFetch, getStoredTenantId, getStoredToken, setStoredTenantId } from '../lib/api';
 
 interface AuthUser {
   email: string;
@@ -30,12 +30,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    const storedToken = window.localStorage.getItem('access_token') ?? window.localStorage.getItem('token');
+    const storedToken = getStoredToken();
     const storedEmail = window.localStorage.getItem('user_email');
 
     setToken(storedToken);
-    setUser(storedEmail ? { email: storedEmail } : null);
+    setUser(storedToken && storedEmail ? { email: storedEmail } : null);
     setIsLoading(false);
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    const handleUnauthorized = () => {
+      setToken(null);
+      setUser(null);
+    };
+
+    window.addEventListener('auth:unauthorized', handleUnauthorized);
+    return () => window.removeEventListener('auth:unauthorized', handleUnauthorized);
   }, []);
 
   const login = useCallback(async (email: string, password: string, tenantId?: string) => {

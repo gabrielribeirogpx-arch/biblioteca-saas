@@ -73,6 +73,35 @@ class ApiError extends Error {
 
 const DEFAULT_API_URL = 'https://backend-biblioteca-saas-production.up.railway.app';
 const DEFAULT_TENANT_ID = 'default';
+const TOKEN_EXPIRY_SKEW_MS = 30_000;
+
+function parseJwtExpiryMs(token: string): number | null {
+  const [, payload] = token.split('.');
+  if (!payload) {
+    return null;
+  }
+
+  try {
+    const base64 = payload.replace(/-/g, '+').replace(/_/g, '/');
+    const json = JSON.parse(atob(base64));
+    if (typeof json.exp !== 'number') {
+      return null;
+    }
+    return json.exp * 1000;
+  } catch {
+    return null;
+  }
+}
+
+function clearStoredAuthState() {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  window.localStorage.removeItem('access_token');
+  window.localStorage.removeItem('token');
+  window.localStorage.removeItem('user_email');
+}
 
 export function getStoredTenantId(): string {
   if (typeof window === 'undefined') {
@@ -111,6 +140,12 @@ export function getStoredToken(): string | null {
     .replace(/^Bearer\s+/i, '')
     .replace(/^"(.+)"$/, '$1');
 
+  const expiryMs = parseJwtExpiryMs(normalizedToken);
+  if (expiryMs && Date.now() >= expiryMs - TOKEN_EXPIRY_SKEW_MS) {
+    clearStoredAuthState();
+    return null;
+  }
+
   return normalizedToken || null;
 }
 
@@ -133,16 +168,7 @@ export async function apiFetch<T = unknown>(url: string, options: RequestInit = 
   const tenant = getStoredTenantId();
   const isProtectedEndpoint = url.startsWith('/api/v1/') && !url.startsWith('/api/v1/auth/login');
 
-  if (typeof window !== 'undefined') {
-    console.log('[apiFetch] JWT token:', token);
-    console.log('[apiFetch] Tenant:', tenant);
-    console.log('[apiFetch] Authorization header:', token ? `Bearer ${token}` : 'sem token');
-  }
-
   if (isProtectedEndpoint && !token) {
-    if (typeof window !== 'undefined') {
-      console.warn('🚫 Request bloqueada - token ainda não carregado');
-    }
     return null;
   }
 
@@ -176,7 +202,8 @@ export async function apiFetch<T = unknown>(url: string, options: RequestInit = 
 
   if (response.status === 401) {
     if (typeof window !== 'undefined') {
-      console.warn('401 ignorado temporariamente (startup)');
+      clearStoredAuthState();
+      window.dispatchEvent(new Event('auth:unauthorized'));
     }
     return null;
   }
