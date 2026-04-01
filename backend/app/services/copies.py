@@ -23,8 +23,10 @@ class CopyService:
         return CopyOut(id=copy.id, book_id=copy.book_id, barcode=copy.barcode, available=True)
 
     @staticmethod
-    async def list_copies(db: AsyncSession, library_id: int) -> list[CopyOut]:
-        result = await db.execute(select(Copy).where(Copy.library_id == library_id).order_by(Copy.id.asc()))
+    async def list_copies(db: AsyncSession, library_id: int, tenant_id: int) -> list[CopyOut]:
+        result = await db.execute(
+            select(Copy).where(Copy.library_id == library_id, Copy.tenant_id == tenant_id).order_by(Copy.id.asc())
+        )
         copies = result.scalars().all()
         return [
             CopyOut(

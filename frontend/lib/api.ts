@@ -116,6 +116,14 @@ const DEFAULT_TENANT_ID = 'default';
 const TOKEN_EXPIRY_SKEW_MS = 30_000;
 
 function parseJwtExpiryMs(token: string): number | null {
+  const claims = parseJwtClaims(token);
+  if (!claims || typeof claims.exp !== 'number') {
+    return null;
+  }
+  return claims.exp * 1000;
+}
+
+function parseJwtClaims(token: string): Record<string, unknown> | null {
   const [, payload] = token.split('.');
   if (!payload) {
     return null;
@@ -123,11 +131,7 @@ function parseJwtExpiryMs(token: string): number | null {
 
   try {
     const base64 = payload.replace(/-/g, '+').replace(/_/g, '/');
-    const json = JSON.parse(atob(base64));
-    if (typeof json.exp !== 'number') {
-      return null;
-    }
-    return json.exp * 1000;
+    return JSON.parse(atob(base64)) as Record<string, unknown>;
   } catch {
     return null;
   }
@@ -225,6 +229,7 @@ function buildUrl(baseUrl: string, endpoint: string): string {
 
 export async function apiFetch<T = unknown>(url: string, options: RequestInit = {}): Promise<T | null> {
   const token = getStoredToken();
+  const tokenClaims = token ? parseJwtClaims(token) : null;
   const tenant = getStoredTenantId();
   const libraryId = getStoredLibraryId();
   const isProtectedEndpoint = url.startsWith('/api/v1/') && !url.startsWith('/api/v1/auth/login');
@@ -243,11 +248,14 @@ export async function apiFetch<T = unknown>(url: string, options: RequestInit = 
   }
 
   if (url.startsWith('/api/v1/')) {
+    const tokenTenantId = tokenClaims && tokenClaims.tenant_id != null ? String(tokenClaims.tenant_id) : null;
+    const tokenTenantSlug = tokenClaims && tokenClaims.tenant != null ? String(tokenClaims.tenant) : null;
+
     if (!headers.has('X-Tenant-ID')) {
-      headers.set('X-Tenant-ID', tenant);
+      headers.set('X-Tenant-ID', tokenTenantId ?? tenant);
     }
     if (!headers.has('X-Tenant-Slug')) {
-      headers.set('X-Tenant-Slug', tenant);
+      headers.set('X-Tenant-Slug', tokenTenantSlug ?? tenant);
     }
     if (libraryId && !headers.has('X-Library-ID')) {
       headers.set('X-Library-ID', libraryId);

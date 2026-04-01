@@ -23,10 +23,12 @@ async def list_fines(
     auth: AuthContext = Depends(require_user),
 ) -> FineListResponse:
     offset = (page - 1) * page_size
-    total = await db.scalar(select(func.count()).select_from(Fine).where(Fine.library_id == ctx.tenant.library_id))
+    total = await db.scalar(
+        select(func.count()).select_from(Fine).where(Fine.library_id == ctx.tenant.library_id, Fine.tenant_id == auth.tenant_id)
+    )
     result = await db.execute(
         select(Fine)
-        .where(Fine.library_id == ctx.tenant.library_id)
+        .where(Fine.library_id == ctx.tenant.library_id, Fine.tenant_id == auth.tenant_id)
         .order_by(Fine.created_at.desc(), Fine.id.desc())
         .offset(offset)
         .limit(page_size)
@@ -55,7 +57,7 @@ async def pay_fine(
     ctx: TenantScopedContext = Depends(get_tenant_context),
     auth: AuthContext = Depends(require_user),
 ) -> FineOut:
-    fine = await FineService.settle_fine(db, ctx.tenant.library_id, fine_id, payload.amount)
+    fine = await FineService.settle_fine(db, ctx.tenant.library_id, auth.tenant_id, fine_id, payload.amount)
     if not fine:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Fine not found')
 
