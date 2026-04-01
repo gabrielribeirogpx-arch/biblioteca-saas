@@ -11,6 +11,7 @@ from app.models.fine import Fine, FineStatus
 from app.models.loan import Loan, LoanStatus
 from app.models.user import User
 from app.schemas.loans import LoanCreate, LoanOut
+from app.services.reservation_service import ReservationService
 
 
 class LoanService:
@@ -84,6 +85,7 @@ class LoanService:
 
         copy = await LoanService._get_copy(db, library_id, loan.copy_id)
         copy.status = CopyStatus.AVAILABLE
+        await ReservationService.fulfill_next_reservation_for_copy(db, library_id, copy.id, auto_commit=False)
 
         if loan.due_date < now:
             overdue_days = max(1, (now.date() - loan.due_date.date()).days)

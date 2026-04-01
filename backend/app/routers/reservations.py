@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import AuthContext, TenantScopedContext, get_db, get_tenant_context, require_user
+from app.api.deps import AuthContext, TenantScopedContext, get_db, get_tenant_context, require_librarian, require_user
 from app.models.audit_log import AuditActorType, AuditCategory
 from app.models.reservation import Reservation, ReservationStatus
 from app.schemas.common import MessageResponse
@@ -40,6 +40,7 @@ async def create_reservation(
         id=reservation.id,
         user_id=reservation.user_id,
         copy_id=reservation.copy_id,
+        position=reservation.position,
         status=reservation.status.value,
         reserved_at=reservation.reserved_at,
         expires_at=reservation.expires_at,
@@ -59,7 +60,7 @@ async def list_reservations(
     result = await db.execute(
         select(Reservation)
         .where(Reservation.library_id == ctx.tenant.library_id)
-        .order_by(Reservation.reserved_at.desc(), Reservation.id.desc())
+        .order_by(Reservation.copy_id.asc(), Reservation.position.asc(), Reservation.id.asc())
         .offset(offset)
         .limit(page_size)
     )
@@ -68,6 +69,7 @@ async def list_reservations(
             id=row.id,
             user_id=row.user_id,
             copy_id=row.copy_id,
+            position=row.position,
             status=row.status.value,
             reserved_at=row.reserved_at,
             expires_at=row.expires_at,
@@ -96,7 +98,7 @@ async def cancel_reservation(
     if not reservation:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Reservation not found')
 
-    reservation.status = ReservationStatus.CANCELED
+    reservation.status = ReservationStatus.CANCELLED
     await db.commit()
 
     await AuditService.log_event(
@@ -114,3 +116,13 @@ async def cancel_reservation(
         ip_address=request.client.host if request.client else None,
     )
     return MessageResponse(message='Reservation canceled')
+
+
+@router.post('/process-queue', response_model=MessageResponse)
+async def process_reservation_queue(
+    db: AsyncSession = Depends(get_db),
+    ctx: TenantScopedContext = Depends(get_tenant_context),
+    auth: AuthContext = Depends(require_librarian),
+) -> MessageResponse:
+    processed = await ReservationService.process_queue(db, ctx.tenant.library_id)
+    return MessageResponse(message=f'Reservation queue processed: {processed} updates')
