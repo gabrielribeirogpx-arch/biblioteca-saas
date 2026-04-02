@@ -48,18 +48,11 @@ class AuthContext:
 
 async def _resolve_library_from_tenant_key(db: AsyncSession, tenant_key: str) -> Library | None:
     def _build_query():
-        base_query = (
+        return (
             select(Library)
             .options(selectinload(Library.organization))
             .where(Library.code == tenant_key)
         )
-        if tenant_key.isdigit():
-            return (
-                select(Library)
-                .options(selectinload(Library.organization))
-                .where((Library.code == tenant_key) | (Library.id == int(tenant_key)))
-            )
-        return base_query
 
     try:
         library = (await db.execute(_build_query())).scalar_one_or_none()
@@ -194,6 +187,10 @@ async def get_tenant_from_request(request: Request, db: AsyncSession) -> Library
         return None
 
     return await _resolve_library_from_tenant_key(db, tenant_key)
+
+
+def get_current_library(request: Request) -> str | None:
+    return request.headers.get("X-Library-ID")
 
 
 _bearer = HTTPBearer(auto_error=False)
@@ -351,10 +348,13 @@ async def get_current_tenant(
     db: AsyncSession = Depends(get_db),
     x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
     x_tenant_slug: str | None = Header(default=None, alias="X-Tenant-Slug"),
+    current_library: str | None = Depends(get_current_library),
     user=Depends(get_current_user),
 ) -> TenantContext:
     tenant_query = request.query_params.get("tenant")
     tenant_key = (x_tenant_slug or x_tenant_id or tenant_query or str(user.library_id)).strip()
+    if current_library and current_library.strip().isdigit():
+        tenant_key = current_library.strip()
     logger.info("tenant.current requested tenant_key=%s user_id=%s", tenant_key, user.id)
 
     library = await _resolve_library_from_tenant_key(db, tenant_key)
