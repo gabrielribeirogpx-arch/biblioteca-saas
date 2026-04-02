@@ -251,19 +251,6 @@ function buildUrl(baseUrl: string, endpoint: string): string {
   return `${normalizedBase}${normalizedEndpoint}`;
 }
 
-function appendTenantQueryParam(url: string, tenant: string): string {
-  if (!url.startsWith('/api/v1/')) {
-    return url;
-  }
-
-  if (url.includes('tenant=')) {
-    return url;
-  }
-
-  const separator = url.includes('?') ? '&' : '?';
-  return `${url}${separator}tenant=${encodeURIComponent(tenant)}`;
-}
-
 export async function apiFetch<T = unknown>(url: string, options: RequestInit = {}): Promise<T | null> {
   const token = getStoredToken();
   const tokenClaims = token ? parseJwtClaims(token) : null;
@@ -309,7 +296,7 @@ export async function apiFetch<T = unknown>(url: string, options: RequestInit = 
     headers.set('Authorization', `Bearer ${token}`);
   }
 
-  const response = await fetch(buildUrl(getApiBaseUrl(), appendTenantQueryParam(url, tenant)), {
+  const response = await fetch(buildUrl(getApiBaseUrl(), url), {
     ...options,
     headers,
     cache: 'no-store'

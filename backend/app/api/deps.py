@@ -126,7 +126,6 @@ async def resolve_tenant(
     x_library_id: str | None = Header(default=None, alias="X-Library-ID"),
     tenant_query: str | None = None,
 ) -> TenantContext:
-    tenant_query = tenant_query or request.query_params.get("tenant")
     tenant_key = (
         x_tenant_slug
         or x_tenant_id
@@ -177,7 +176,6 @@ async def get_tenant_from_request(request: Request, db: AsyncSession) -> Library
     tenant_key = (
         request.headers.get("X-Tenant-Slug")
         or request.headers.get("X-Tenant-ID")
-        or request.query_params.get("tenant")
     )
     if not tenant_key:
         return None
@@ -286,8 +284,7 @@ async def get_current_tenant(
     current_library: str | None = Depends(get_current_library),
     user=Depends(get_current_user),
 ) -> TenantContext:
-    tenant_query = request.query_params.get("tenant")
-    tenant_key = (x_tenant_slug or x_tenant_id or tenant_query or str(user.library_id)).strip()
+    tenant_key = (x_tenant_slug or x_tenant_id or str(user.library_id)).strip()
     if current_library and current_library.strip().isdigit():
         tenant_key = current_library.strip()
     logger.info("tenant.current requested tenant_key=%s user_id=%s", tenant_key, user.id)
