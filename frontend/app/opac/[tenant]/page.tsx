@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import type { Metadata } from 'next';
 
-import { getPublicBooks } from '../../lib/opac';
+import { getPublicBooks } from '../../../lib/opac';
 
 type SearchParams = Record<string, string | string[] | undefined>;
 
@@ -17,19 +17,14 @@ function asValue(value: string | string[] | undefined): string {
   return value ?? '';
 }
 
-export default async function OPACPage({ searchParams }: { searchParams: SearchParams }) {
-  const tenant = asValue(searchParams.tenant);
-  if (!tenant) {
-    return (
-      <main className="min-h-screen bg-slate-50 px-4 py-10">
-        <div className="mx-auto max-w-3xl rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
-          <h1 className="text-xl font-bold text-slate-900">Tenant obrigatório</h1>
-          <p className="mt-2 text-sm text-slate-600">Acesse o OPAC pelo caminho <code>/opac/&lt;tenant&gt;</code>, por exemplo: <code>/opac/acme</code>.</p>
-        </div>
-      </main>
-    );
-  }
-
+export default async function OPACTenantPage({
+  params,
+  searchParams
+}: {
+  params: { tenant: string };
+  searchParams: SearchParams;
+}) {
+  const tenant = params.tenant;
   const page = Math.max(1, Number(asValue(searchParams.page) || 1));
   const pageSize = 12;
 
@@ -59,7 +54,7 @@ export default async function OPACPage({ searchParams }: { searchParams: SearchP
       <div className="mx-auto flex w-full max-w-7xl flex-col gap-6">
         <header className="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
           <h1 className="text-2xl font-bold text-slate-900">OPAC - Catálogo Público</h1>
-          <p className="mt-2 text-sm text-slate-600">Pesquisa por título, autor, assunto e ISBN sem autenticação.</p>
+          <p className="mt-2 text-sm text-slate-600">Tenant: <span className="font-semibold">{tenant}</span></p>
         </header>
 
         <section className="grid gap-6 lg:grid-cols-[280px_1fr]">
