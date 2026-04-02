@@ -1,12 +1,13 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
 
 import { ProtectedRoute } from '../../components/auth/ProtectedRoute';
 import { AppShell } from '../../components/ui/AppShell';
 import { DataTable } from '../../components/ui/DataTable';
+import { Toast } from '../../components/ui/Toast';
 import { useAuth } from '../../hooks/useAuth';
-import { apiFetch, type Loan } from '../../lib/api';
+import { apiFetch, getCopies, getUsers, type Copy, type Loan, type User } from '../../lib/api';
 
 interface LoanRow {
   [key: string]: string | number | null | undefined;
@@ -17,62 +18,216 @@ interface LoanRow {
   status: string;
 }
 
+const ACTIVE_LOAN_STATUSES = new Set(['active', 'open', 'loaned', 'overdue']);
+
+const formatDate = (isoDate: string): string => {
+  const date = new Date(isoDate);
+  if (Number.isNaN(date.getTime())) {
+    return isoDate;
+  }
+  return date.toLocaleDateString('pt-BR');
+};
+
+const asLoanRows = (loans: Loan[]): LoanRow[] =>
+  loans.map((loan) => ({
+    id: loan.id,
+    copy_id: loan.copy_id,
+    user_id: String(loan.user_id),
+    due_date: formatDate(loan.due_date),
+    status: loan.status
+  }));
+
 export default function LoansPage() {
   const { token, role, loading } = useAuth();
   const [rows, setRows] = useState<LoanRow[]>([]);
+  const [users, setUsers] = useState<User[]>([]);
+  const [copies, setCopies] = useState<Copy[]>([]);
+  const [selectedUserId, setSelectedUserId] = useState('');
+  const [selectedCopyId, setSelectedCopyId] = useState('');
+  const [copySearch, setCopySearch] = useState('');
+  const [loadingData, setLoadingData] = useState(true);
+  const [submittingLoan, setSubmittingLoan] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+
+  const loadData = useCallback(async () => {
+    if (!token) {
+      return;
+    }
+
+    setLoadingData(true);
+    setErrorMessage(null);
+
+    try {
+      const [loanResponse, usersResponse, copyResponse] = await Promise.all([
+        apiFetch<{ items: Loan[] }>('/api/loans/?page=1&page_size=100'),
+        getUsers(1, 100),
+        getCopies()
+      ]);
+
+      const activeLoans = (loanResponse?.items ?? []).filter((loan) =>
+        ACTIVE_LOAN_STATUSES.has(loan.status.toLowerCase())
+      );
+
+      setRows(asLoanRows(activeLoans));
+      setUsers(usersResponse.items);
+      setCopies(copyResponse);
+    } catch {
+      setRows([]);
+      setErrorMessage('Não foi possível carregar empréstimos ativos.');
+    } finally {
+      setLoadingData(false);
+    }
+  }, [token]);
 
   useEffect(() => {
-    let isMounted = true;
     if (loading || !token) {
       return;
     }
 
-    apiFetch<{ items: Loan[] }>('/api/v1/loans/?page=1&page_size=50')
-      .then((loans) => {
-        if (!isMounted || !loans) {
-          return;
-        }
-        setRows(
-          (loans.items ?? []).map((loan) => ({
-            id: loan.id,
-            copy_id: loan.copy_id,
-            user_id: loan.user_id,
-            due_date: loan.due_date,
-            status: loan.status
-          }))
-        );
-      })
-      .catch(() => {
-        if (isMounted) {
-          setRows([]);
-        }
+    void loadData();
+  }, [loading, token, loadData]);
+
+  useEffect(() => {
+    if (!successMessage) {
+      return;
+    }
+
+    const timeout = window.setTimeout(() => setSuccessMessage(null), 3500);
+    return () => window.clearTimeout(timeout);
+  }, [successMessage]);
+
+  const filteredCopies = useMemo(() => {
+    const normalized = copySearch.trim().toLowerCase();
+    if (!normalized) {
+      return copies;
+    }
+
+    return copies.filter((copy) => {
+      const barcode = (copy.barcode ?? '').toLowerCase();
+      return barcode.includes(normalized) || String(copy.id).includes(normalized);
+    });
+  }, [copySearch, copies]);
+
+  const createLoan = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    const userId = Number(selectedUserId);
+    const copyId = Number(selectedCopyId);
+
+    if (!userId || !copyId) {
+      setErrorMessage('Selecione usuário e exemplar para registrar o empréstimo.');
+      return;
+    }
+
+    setSubmittingLoan(true);
+    setErrorMessage(null);
+
+    try {
+      await apiFetch('/api/loans/', {
+        method: 'POST',
+        body: JSON.stringify({ user_id: userId, copy_id: copyId })
       });
 
-    return () => {
-      isMounted = false;
-    };
-  }, [loading, token]);
+      setSelectedCopyId('');
+      setCopySearch('');
+      setSuccessMessage('Empréstimo registrado com sucesso.');
+      await loadData();
+    } catch {
+      setErrorMessage('Falha ao registrar empréstimo. Verifique regras de circulação e tente novamente.');
+    } finally {
+      setSubmittingLoan(false);
+    }
+  };
 
   return (
     <ProtectedRoute>
       <AppShell
-      role={role ?? 'member'}
-      title="Loans"
-      subtitle="Process checkouts, monitor due dates, and return circulation assets quickly."
-    >
-      <DataTable
-        columns={[
-          { key: 'id', label: 'Loan #' },
-          { key: 'copy_id', label: 'Copy ID' },
-          { key: 'user_id', label: 'User ID' },
-          { key: 'due_date', label: 'Due Date' },
-          { key: 'status', label: 'Status' }
-        ]}
-        description="Track renewals and returns across all active circulation events."
-        rows={rows}
-        searchableFields={['id', 'copy_id', 'user_id', 'status']}
-        title="Circulation Queue"
-      />
+        role={role ?? 'member'}
+        title="Empréstimos"
+        subtitle="Controle de circulação com empréstimos ativos, cadastro rápido e histórico operacional."
+      >
+        {successMessage ? <Toast message={successMessage} /> : null}
+
+        <article className="rounded-xl border bg-white p-4 shadow-sm md:p-6">
+          <div className="mb-4">
+            <h3 className="text-lg font-semibold text-slate-900">Novo empréstimo</h3>
+            <p className="text-sm text-slate-600">Selecione usuário e exemplar (barcode ou ID) para processar o empréstimo.</p>
+          </div>
+
+          <form className="grid gap-4 md:grid-cols-2" onSubmit={createLoan}>
+            <label className="text-sm font-medium text-slate-700">
+              Usuário
+              <select
+                className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2"
+                value={selectedUserId}
+                onChange={(event) => setSelectedUserId(event.target.value)}
+              >
+                <option value="">Selecione um usuário</option>
+                {users.map((user) => (
+                  <option key={user.id} value={user.id}>
+                    {user.full_name} ({user.email})
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <div>
+              <label className="text-sm font-medium text-slate-700">
+                Buscar exemplar (barcode ou ID)
+                <input
+                  className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2"
+                  placeholder="Ex.: 000123 ou 345"
+                  value={copySearch}
+                  onChange={(event) => setCopySearch(event.target.value)}
+                />
+              </label>
+              <label className="mt-3 block text-sm font-medium text-slate-700">
+                Exemplar
+                <select
+                  className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2"
+                  value={selectedCopyId}
+                  onChange={(event) => setSelectedCopyId(event.target.value)}
+                >
+                  <option value="">Selecione um exemplar</option>
+                  {filteredCopies.map((copy) => (
+                    <option key={copy.id} value={copy.id}>
+                      #{copy.id} {copy.barcode ? `- ${copy.barcode}` : '- sem barcode'}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+
+            <div className="md:col-span-2">
+              <button
+                type="submit"
+                disabled={submittingLoan}
+                className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {submittingLoan ? 'Processando...' : 'Emprestar'}
+              </button>
+            </div>
+          </form>
+
+          {errorMessage ? <p className="mt-3 text-sm font-medium text-rose-700">{errorMessage}</p> : null}
+        </article>
+
+        {loadingData ? <p className="text-sm text-slate-600">Carregando empréstimos ativos...</p> : null}
+
+        <DataTable
+          columns={[
+            { key: 'id', label: 'Empréstimo #' },
+            { key: 'copy_id', label: 'Exemplar' },
+            { key: 'user_id', label: 'Usuário' },
+            { key: 'due_date', label: 'Data de devolução' },
+            { key: 'status', label: 'Status' }
+          ]}
+          description="Lista de empréstimos ativos da biblioteca."
+          rows={rows}
+          searchableFields={['id', 'copy_id', 'user_id', 'status']}
+          title="Empréstimos ativos"
+        />
       </AppShell>
     </ProtectedRoute>
   );

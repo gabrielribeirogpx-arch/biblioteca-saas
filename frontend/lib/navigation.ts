@@ -38,9 +38,25 @@ export const APP_NAVIGATION: NavItem[] = [
   },
   {
     href: '/loans',
-    label: 'Loans',
-    description: 'Manage circulation and due dates',
+    label: 'Empréstimos',
+    description: 'Registrar novos empréstimos e monitorar ativos',
     roles: ['super_admin', 'librarian', 'assistant'],
+    icon: 'none',
+    section: 'principal'
+  },
+  {
+    href: '/returns',
+    label: 'Devoluções',
+    description: 'Processar devoluções de empréstimos ativos',
+    roles: ['super_admin', 'librarian', 'assistant'],
+    icon: 'none',
+    section: 'principal'
+  },
+  {
+    href: '/reservations',
+    label: 'Reservas',
+    description: 'Acompanhar fila por livro e status',
+    roles: ['super_admin', 'librarian', 'assistant', 'member'],
     icon: 'none',
     section: 'principal'
   },
@@ -59,14 +75,6 @@ export const APP_NAVIGATION: NavItem[] = [
     roles: ['super_admin'],
     icon: 'book',
     section: 'administracao'
-  },
-  {
-    href: '/reservations',
-    label: 'Reservations',
-    description: 'Track book reservations and queue status',
-    roles: ['super_admin', 'librarian', 'assistant', 'member'],
-    icon: 'none',
-    section: 'principal'
   },
   {
     href: '/fines',

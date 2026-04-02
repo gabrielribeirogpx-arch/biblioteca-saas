@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import type { Metadata } from 'next';
 
+import { ReserveButton } from '../../../components/opac/ReserveButton';
 import { getPublicBooks } from '../../../lib/opac';
 
 type SearchParams = Record<string, string | string[] | undefined>;
@@ -107,9 +108,12 @@ export default async function OPACTenantPage({
                     <p className={book.status === 'available' ? 'font-semibold text-emerald-700' : 'font-semibold text-rose-700'}>
                       {book.status === 'available' ? 'Disponível para empréstimo' : 'Indisponível no momento'}
                     </p>
-                    <Link href={`/opac/${tenant}/book/${book.id}`} className="inline-flex rounded-md bg-slate-900 px-3 py-2 text-xs font-semibold text-white">
-                      Ver detalhes
-                    </Link>
+                    <div className="flex flex-wrap gap-2">
+                      <Link href={`/opac/${tenant}/book/${book.id}`} className="inline-flex rounded-md bg-slate-900 px-3 py-2 text-xs font-semibold text-white">
+                        Ver detalhes
+                      </Link>
+                      <ReserveButton bookId={book.id} />
+                    </div>
                   </div>
                 </li>
               ))}

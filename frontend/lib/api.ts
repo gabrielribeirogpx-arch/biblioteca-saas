@@ -138,7 +138,8 @@ export interface MostBorrowedItem {
 export interface Reservation {
   id: number;
   user_id: number;
-  copy_id: number;
+  book_id: number;
+  copy_id?: number | null;
   position: number;
   status: string;
   reserved_at: string;
@@ -537,8 +538,8 @@ export class ApiClient {
     return this.request<PaginatedResponse<Reservation>>(`/reservations/?page=${page}&page_size=${pageSize}`);
   }
 
-  createReservation(copyId: number): Promise<Reservation | null> {
-    return this.request<Reservation>('/reservations/', { method: 'POST', body: JSON.stringify({ copy_id: copyId }) });
+  createReservation(bookId: number): Promise<Reservation | null> {
+    return this.request<Reservation>('/reservations/', { method: 'POST', body: JSON.stringify({ book_id: bookId }) });
   }
 
   listFines(page = 1, pageSize = 20): Promise<PaginatedResponse<Fine> | null> {
