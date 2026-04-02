@@ -43,6 +43,7 @@ export function RoleAwareNav({ role }: RoleAwareNavProps) {
         }`}
         href={item.href}
         key={item.href}
+        prefetch={false}
       >
         <p className="flex items-center gap-2 font-semibold">
           {item.icon === 'book' ? <BookIcon /> : null}
