@@ -48,11 +48,10 @@ class PublicCatalogService:
     async def list_books(
         db: AsyncSession,
         *,
+        tenant_id: int,
         page: int = 1,
         page_size: int = 20,
         search: str | None = None,
-        library: str | None = None,
-        tenant: str | None = None,
         isbn: str | None = None,
         subject: str | None = None,
     ) -> OPACBookListResponse:
@@ -90,7 +89,7 @@ class PublicCatalogService:
             .join(Library, Library.id == Book.library_id)
             .join(Tenant, Tenant.id == Library.tenant_id)
             .outerjoin(copy_stats_subquery, copy_stats_subquery.c.book_id == Book.id)
-            .where(Library.is_active.is_(True))
+            .where(Library.is_active.is_(True), Library.tenant_id == tenant_id)
         )
 
         if search:
@@ -101,20 +100,6 @@ class PublicCatalogService:
                     cast(func.array_to_string(Book.authors, " | "), String).ilike(term),
                 )
             )
-
-        if library:
-            lib_term = f"%{library.strip()}%"
-            if library.strip().isdigit():
-                base_query = base_query.where(or_(Library.id == int(library.strip()), Library.name.ilike(lib_term), Library.code.ilike(lib_term)))
-            else:
-                base_query = base_query.where(or_(Library.name.ilike(lib_term), Library.code.ilike(lib_term)))
-
-        if tenant:
-            tenant_term = f"%{tenant.strip()}%"
-            if tenant.strip().isdigit():
-                base_query = base_query.where(or_(Tenant.id == int(tenant.strip()), Tenant.slug.ilike(tenant_term), Tenant.name.ilike(tenant_term)))
-            else:
-                base_query = base_query.where(or_(Tenant.slug.ilike(tenant_term), Tenant.name.ilike(tenant_term)))
 
         if isbn:
             base_query = base_query.where(Book.isbn.ilike(f"%{isbn.strip()}%"))
@@ -148,7 +133,7 @@ class PublicCatalogService:
         return OPACBookListResponse(items=items, page=safe_page, page_size=safe_page_size, total=total)
 
     @staticmethod
-    async def get_book(db: AsyncSession, book_id: int) -> OPACBookDetailResponse | None:
+    async def get_book(db: AsyncSession, book_id: int, *, tenant_id: int) -> OPACBookDetailResponse | None:
         available_case = case((Copy.status == CopyStatus.AVAILABLE, 1), else_=0)
 
         row = (
@@ -176,7 +161,7 @@ class PublicCatalogService:
                 .join(Library, Library.id == Book.library_id)
                 .join(Tenant, Tenant.id == Library.tenant_id)
                 .outerjoin(Copy, Copy.book_id == Book.id)
-                .where(Book.id == book_id, Library.is_active.is_(True))
+                .where(Book.id == book_id, Library.is_active.is_(True), Library.tenant_id == tenant_id)
                 .group_by(Book.id, Library.id, Tenant.id)
             )
         ).first()
@@ -198,7 +183,7 @@ class PublicCatalogService:
             .join(Library, Library.id == Book.library_id)
             .join(Tenant, Tenant.id == Library.tenant_id)
             .outerjoin(Copy, Copy.book_id == Book.id)
-            .where(Library.is_active.is_(True))
+            .where(Library.is_active.is_(True), Library.tenant_id == tenant_id)
         )
 
         if row.fingerprint_isbn:

@@ -22,8 +22,6 @@ export default async function OPACPage({ searchParams }: { searchParams: SearchP
   const pageSize = 12;
 
   const search = asValue(searchParams.search);
-  const library = asValue(searchParams.library);
-  const tenant = asValue(searchParams.tenant);
   const isbn = asValue(searchParams.isbn);
   const subject = asValue(searchParams.subject);
 
@@ -31,8 +29,6 @@ export default async function OPACPage({ searchParams }: { searchParams: SearchP
     page: String(page),
     page_size: String(pageSize),
     ...(search ? { search } : {}),
-    ...(library ? { library } : {}),
-    ...(tenant ? { tenant } : {}),
     ...(isbn ? { isbn } : {}),
     ...(subject ? { subject } : {})
   });
@@ -51,7 +47,7 @@ export default async function OPACPage({ searchParams }: { searchParams: SearchP
       <div className="mx-auto flex w-full max-w-7xl flex-col gap-6">
         <header className="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
           <h1 className="text-2xl font-bold text-slate-900">OPAC - Catálogo Público</h1>
-          <p className="mt-2 text-sm text-slate-600">Pesquisa por título, autor, assunto, ISBN, tenant e biblioteca sem autenticação.</p>
+          <p className="mt-2 text-sm text-slate-600">Pesquisa por título, autor, assunto e ISBN sem autenticação.</p>
         </header>
 
         <section className="grid gap-6 lg:grid-cols-[280px_1fr]">
@@ -60,14 +56,6 @@ export default async function OPACPage({ searchParams }: { searchParams: SearchP
               <div>
                 <label className="mb-1 block text-xs font-semibold uppercase text-slate-500">Busca</label>
                 <input name="search" defaultValue={search} placeholder="Título ou autor" className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
-              </div>
-              <div>
-                <label className="mb-1 block text-xs font-semibold uppercase text-slate-500">Biblioteca</label>
-                <input name="library" defaultValue={library} placeholder="Nome, código ou ID" className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
-              </div>
-              <div>
-                <label className="mb-1 block text-xs font-semibold uppercase text-slate-500">Tenant</label>
-                <input name="tenant" defaultValue={tenant} placeholder="Slug, nome ou ID" className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" />
               </div>
               <div>
                 <label className="mb-1 block text-xs font-semibold uppercase text-slate-500">ISBN</label>
