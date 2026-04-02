@@ -28,12 +28,55 @@ export interface Loan {
   status: string;
 }
 
+export interface UserRoleAssignment {
+  id: number;
+  code: string;
+  name: string;
+  permission_codes: string[];
+}
+
+export interface UserLibraryAssignment {
+  id: number;
+  code: string;
+  name: string;
+}
+
 export interface User {
   id: number;
   email: string;
   full_name: string;
   role: UserRole;
-  permissions?: string[];
+  is_active: boolean;
+  tenant_id: number | null;
+  library_id: number;
+  roles: UserRoleAssignment[];
+  libraries: UserLibraryAssignment[];
+  permissions: string[];
+}
+
+export interface UserMetadata {
+  roles: UserRoleAssignment[];
+  libraries: UserLibraryAssignment[];
+}
+
+export interface UserCreateInput {
+  email: string;
+  full_name: string;
+  password: string;
+  role: UserRole;
+  role_ids: number[];
+  library_ids: number[];
+  is_active?: boolean;
+}
+
+export interface UserUpdateInput {
+  email?: string;
+  full_name?: string;
+  password?: string;
+  role?: UserRole;
+  role_ids?: number[];
+  library_ids?: number[];
+  is_active?: boolean;
 }
 
 export interface LibraryOption {
@@ -353,8 +396,37 @@ export async function getLoans(): Promise<Loan[]> {
   return (await apiFetch<PaginatedResponse<Loan>>('/api/v1/loans/?page=1&page_size=50'))?.items ?? [];
 }
 
-export async function getUsers(): Promise<User[]> {
-  return (await apiFetch<PaginatedResponse<User>>('/api/v1/users/?page=1&page_size=50'))?.items ?? [];
+export async function getUsers(page = 1, pageSize = 50): Promise<PaginatedResponse<User>> {
+  return (await apiFetch<PaginatedResponse<User>>(`/api/v1/users/?page=${page}&page_size=${pageSize}`))
+    ?? { items: [], page, page_size: pageSize, total: 0 };
+}
+
+export async function getUserById(userId: number): Promise<User | null> {
+  return await apiFetch<User>(`/api/v1/users/${userId}`);
+}
+
+export async function getUsersMetadata(): Promise<UserMetadata> {
+  return (await apiFetch<UserMetadata>('/api/v1/users/metadata')) ?? { roles: [], libraries: [] };
+}
+
+export async function createUser(payload: UserCreateInput): Promise<User | null> {
+  return await apiFetch<User>('/api/v1/users/', {
+    method: 'POST',
+    body: JSON.stringify(payload)
+  });
+}
+
+export async function updateUser(userId: number, payload: UserUpdateInput): Promise<User | null> {
+  return await apiFetch<User>(`/api/v1/users/${userId}`, {
+    method: 'PUT',
+    body: JSON.stringify(payload)
+  });
+}
+
+export async function deleteUser(userId: number): Promise<void> {
+  await apiFetch(`/api/v1/users/${userId}`, {
+    method: 'DELETE'
+  });
 }
 
 export async function getLibraries(): Promise<LibraryOption[]> {
