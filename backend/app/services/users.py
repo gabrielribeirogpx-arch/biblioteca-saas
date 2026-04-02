@@ -6,6 +6,7 @@ from app.models.library import Library
 from app.models.user import User
 from app.schemas.users import UserCreate, UserOut
 from app.services.auth_service import AuthService
+from app.services.rbac_service import RBACService
 
 
 class UserService:
@@ -30,6 +31,8 @@ class UserService:
             is_active=True,
         )
         db.add(user)
+        await db.flush()
+        await RBACService.ensure_user_bindings(db, user)
         await db.commit()
         await db.refresh(user)
         return UserOut(id=user.id, email=user.email, full_name=user.full_name, role=user.role, password=None)

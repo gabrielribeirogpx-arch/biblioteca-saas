@@ -7,6 +7,7 @@ import { AppShell } from '../../components/ui/AppShell';
 import { DataTable } from '../../components/ui/DataTable';
 import { useAuth } from '../../hooks/useAuth';
 import { apiFetch, type User } from '../../lib/api';
+import { hasPermission } from '../../lib/permissions';
 
 interface UserRow {
   [key: string]: string | number | null | undefined;
@@ -17,10 +18,14 @@ interface UserRow {
 }
 
 export default function UsersPage() {
-  const { token, role, loading } = useAuth();
+  const { token, role, loading, permissions } = useAuth();
   const [rows, setRows] = useState<UserRow[]>([]);
 
   useEffect(() => {
+    if (!hasPermission('users.read', permissions)) {
+      setRows([]);
+      return;
+    }
     let isMounted = true;
     if (loading || !token) {
       return;
@@ -49,7 +54,7 @@ export default function UsersPage() {
     return () => {
       isMounted = false;
     };
-  }, [loading, token]);
+  }, [loading, permissions, token]);
 
   return (
     <ProtectedRoute>
@@ -58,6 +63,12 @@ export default function UsersPage() {
       title="Users"
       subtitle="Administer tenant user access and role assignments for secure operations."
     >
+
+      {!hasPermission('users.read', permissions) ? (
+        <div className="rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">
+          Seu perfil não possui a permissão <strong>users.read</strong> para visualizar este módulo.
+        </div>
+      ) : (
       <DataTable
         columns={[
           { key: 'id', label: 'User ID' },
@@ -70,6 +81,7 @@ export default function UsersPage() {
         searchableFields={['full_name', 'email', 'role']}
         title="Tenant Users"
       />
+      )}
       </AppShell>
     </ProtectedRoute>
   );
