@@ -3,7 +3,7 @@
 import { useAuth as useAuthContext } from '../context/AuthContext';
 
 export function useAuth() {
-  const { token, isLoading } = useAuthContext();
+  const { token, role, user, isLoading } = useAuthContext();
 
-  return { token, loading: isLoading };
+  return { token, role, user, loading: isLoading };
 }

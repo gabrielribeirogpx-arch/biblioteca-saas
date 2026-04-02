@@ -7,7 +7,7 @@ import { ProtectedRoute } from '../../components/auth/ProtectedRoute';
 import { AppShell } from '../../components/ui/AppShell';
 import { MetricCard } from '../../components/ui/MetricCard';
 import { useAuth } from '../../hooks/useAuth';
-import { apiFetch, type Book, type Copy, type Loan, type UserRole } from '../../lib/api';
+import { apiFetch, type Book, type Copy, type Loan } from '../../lib/api';
 
 type CollectionPayload<T> =
   | T[]
@@ -59,7 +59,7 @@ function getCollectionTotal<T>(payload: CollectionPayload<T>): number {
 
 export default function DashboardPage() {
   const router = useRouter();
-  const role: UserRole = 'librarian';
+  const { token, role, loading } = useAuth();
   const [state, setState] = useState<DashboardState>({
     books: null,
     copies: null,
@@ -69,7 +69,6 @@ export default function DashboardPage() {
     loading: true,
     error: null
   });
-  const { token, loading } = useAuth();
 
   useEffect(() => {
     if (!loading && !token) {
@@ -128,7 +127,7 @@ export default function DashboardPage() {
   return (
     <ProtectedRoute>
       <AppShell
-      role={role}
+      role={role ?? 'member'}
       title="Dashboard"
       subtitle="Monitor catalog health, circulation throughput, and tenant readiness."
     >

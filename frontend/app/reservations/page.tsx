@@ -39,9 +39,8 @@ const formatRemainingTime = (expiresAt?: string | null): string => {
 };
 
 export default function ReservationsPage() {
-  const role = 'librarian';
+  const { token, role, loading } = useAuth();
   const [rows, setRows] = useState<ReservationRow[]>([]);
-  const { token, loading } = useAuth();
 
   useEffect(() => {
     if (loading || !token) return;
@@ -74,7 +73,7 @@ export default function ReservationsPage() {
 
   return (
     <ProtectedRoute>
-      <AppShell role={role} title="Reservations" subtitle="Gerencie fila de reservas por livro e usuário.">
+      <AppShell role={role ?? 'member'} title="Reservations" subtitle="Gerencie fila de reservas por livro e usuário.">
         <button onClick={reserveBook} className="mb-4 rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white">reservar livro</button>
         <DataTable
           columns={[

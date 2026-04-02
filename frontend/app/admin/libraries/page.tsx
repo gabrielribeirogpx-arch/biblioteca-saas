@@ -4,6 +4,7 @@ import { FormEvent, useEffect, useMemo, useState } from 'react';
 
 import { ProtectedRoute } from '../../../components/auth/ProtectedRoute';
 import { AppShell } from '../../../components/ui/AppShell';
+import { useAuth } from '../../../hooks/useAuth';
 import {
   ApiError,
   createLibrary,
@@ -16,6 +17,7 @@ import {
 type ModalMode = 'create' | 'edit';
 
 export default function AdminLibrariesPage() {
+  const { role } = useAuth();
   const [libraries, setLibraries] = useState<LibraryOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -131,7 +133,7 @@ export default function AdminLibrariesPage() {
 
   return (
     <ProtectedRoute>
-      <AppShell role="super_admin" title="Admin · Bibliotecas" subtitle="Gestão completa de bibliotecas por tenant.">
+      <AppShell role={role ?? 'member'} title="Admin · Bibliotecas" subtitle="Gestão completa de bibliotecas por tenant.">
         <div className="rounded-xl border bg-white p-4 shadow-sm md:p-6">
           <div className="mb-4 flex items-center justify-between">
             <h3 className="text-lg font-semibold text-slate-900">Bibliotecas do Tenant</h3>

@@ -19,9 +19,16 @@ class TokenPayload(BaseModel):
     organization_id: int | None = None
 
 
+class LoginUser(BaseModel):
+    id: int
+    email: str
+    role: UserRole
+
+
 class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
+    user: LoginUser
 
 
 class RegisterRequest(BaseModel):

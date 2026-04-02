@@ -19,9 +19,8 @@ interface FineRow {
 }
 
 export default function FinesPage() {
-  const role = 'librarian';
+  const { token, role, loading } = useAuth();
   const [rows, setRows] = useState<FineRow[]>([]);
-  const { token, loading } = useAuth();
 
   const load = async () => {
     const data = await apiFetch<{ items: Fine[] }>('/api/v1/fines/?page=1&page_size=50');
@@ -42,7 +41,7 @@ export default function FinesPage() {
 
   return (
     <ProtectedRoute>
-      <AppShell role={role} title="Fines" subtitle="Controle de multas pendentes e pagamentos.">
+      <AppShell role={role ?? 'member'} title="Fines" subtitle="Controle de multas pendentes e pagamentos.">
         <button onClick={payFine} className="mb-4 rounded bg-emerald-600 px-4 py-2 text-sm font-medium text-white">pagar</button>
         <DataTable
           columns={[

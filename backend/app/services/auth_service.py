@@ -12,7 +12,7 @@ from app.core.config import settings
 from app.models.audit_log import AuditActorType, AuditCategory
 from app.models.library import Library
 from app.models.user import User
-from app.schemas.auth import LoginRequest, TokenPayload, TokenResponse
+from app.schemas.auth import LoginRequest, LoginUser, TokenPayload, TokenResponse
 from app.services.audit_service import AuditService
 
 
@@ -151,7 +151,10 @@ class AuthService:
                 payload={"email": user.email, "role": user.role.value},
             )
 
-            return TokenResponse(access_token=access_token)
+            return TokenResponse(
+                access_token=access_token,
+                user=LoginUser(id=user.id, email=user.email, role=user.role),
+            )
         except HTTPException:
             raise
         except Exception as exc:
