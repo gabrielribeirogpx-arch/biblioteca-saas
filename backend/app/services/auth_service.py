@@ -39,6 +39,7 @@ class AuthService:
             "role": payload.role.value,
             "tenant_id": payload.tenant_id,
             "tenant": payload.tenant,
+            "library_id": payload.library_id,
             "organization_id": payload.organization_id,
         }
 
@@ -65,6 +66,7 @@ class AuthService:
                 role=decoded["role"],
                 tenant_id=int(decoded["tenant_id"]),
                 tenant=str(decoded["tenant"]),
+                library_id=int(decoded["library_id"]) if decoded.get("library_id") is not None else None,
                 organization_id=int(decoded["organization_id"]) if decoded.get("organization_id") is not None else None,
             )
         except (jwt.InvalidTokenError, KeyError, ValueError) as exc:
@@ -131,6 +133,7 @@ class AuthService:
                 role=user.role,
                 tenant_id=user.tenant_id or tenant.tenant_id or tenant.organization_id,
                 tenant=tenant.code,
+                library_id=tenant.id,
                 organization_id=tenant.organization_id,
             )
             access_token = AuthService.create_access_token(token_payload)

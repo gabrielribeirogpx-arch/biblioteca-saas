@@ -45,6 +45,11 @@ export interface LibraryOption {
   created_at: string;
 }
 
+interface SwitchLibraryResponse {
+  access_token: string;
+  token_type?: string;
+}
+
 export interface LibraryCreateInput {
   name: string;
   code?: string;
@@ -207,6 +212,16 @@ export function setStoredLibraryId(libraryId: string) {
   window.localStorage.setItem('library_id', libraryId);
 }
 
+export function setStoredToken(token: string) {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  const normalizedToken = token.trim().replace(/^Bearer\s+/i, '');
+  window.localStorage.setItem('access_token', normalizedToken);
+  window.localStorage.setItem('token', normalizedToken);
+}
+
 export function getStoredToken(): string | null {
   if (typeof window === 'undefined') {
     return null;
@@ -258,12 +273,13 @@ export async function apiFetch<T = unknown>(url: string, options: RequestInit = 
   const libraryId = getStoredLibraryId();
   const isProtectedEndpoint = url.startsWith('/api/v1/') && !url.startsWith('/api/v1/auth/login');
   const isLibraryListingEndpoint = url === '/api/v1/libraries' || url.startsWith('/api/v1/libraries?');
+  const isLibrarySwitchEndpoint = url === '/api/v1/auth/switch-library';
 
   if (isProtectedEndpoint && !token) {
     return null;
   }
 
-  if (isProtectedEndpoint && !isLibraryListingEndpoint && !libraryId) {
+  if (isProtectedEndpoint && !isLibraryListingEndpoint && !isLibrarySwitchEndpoint && !libraryId) {
     throw new ApiError('Selecione uma biblioteca', 400, 'library_id is required');
   }
 
@@ -356,6 +372,27 @@ export async function updateLibrary(libraryId: number, payload: LibraryUpdateInp
     method: 'PATCH',
     body: JSON.stringify(payload)
   });
+}
+
+export async function switchLibrary(libraryId: string): Promise<string> {
+  const numericLibraryId = Number(libraryId);
+  if (!Number.isInteger(numericLibraryId) || numericLibraryId <= 0) {
+    throw new ApiError('Biblioteca inválida para troca de contexto', 400, 'invalid library_id');
+  }
+
+  const response = await apiFetch<SwitchLibraryResponse>('/api/v1/auth/switch-library', {
+    method: 'POST',
+    body: JSON.stringify({ library_id: numericLibraryId })
+  });
+
+  const nextToken = response?.access_token?.trim().replace(/^Bearer\s+/i, '');
+  if (!nextToken) {
+    throw new ApiError('Não foi possível atualizar o token da biblioteca', 500, 'missing access_token');
+  }
+
+  setStoredToken(nextToken);
+  setStoredLibraryId(libraryId);
+  return nextToken;
 }
 
 export async function deleteLibrary(libraryId: number): Promise<void> {
