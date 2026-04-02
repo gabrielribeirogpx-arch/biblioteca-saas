@@ -136,7 +136,7 @@ export default function DashboardPage() {
       ) : null}
 
       {state.error ? (
-        <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700 shadow-sm">Erro ao carregar dados</div>
+        <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700 shadow-sm">{state.error}</div>
       ) : null}
 
       <div className="grid gap-4 md:grid-cols-4">
