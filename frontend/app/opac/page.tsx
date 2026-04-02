@@ -99,7 +99,6 @@ export default async function OPACPage({ searchParams }: { searchParams: SearchP
                     <div>
                       <h2 className="line-clamp-2 text-base font-semibold text-slate-900">{book.title}</h2>
                       <p className="mt-1 text-sm text-slate-600">{book.author}</p>
-                      <p className="mt-1 text-xs text-slate-500">ISBN: {book.isbn ?? 'N/A'}</p>
                     </div>
                   </div>
 
@@ -108,10 +107,10 @@ export default async function OPACPage({ searchParams }: { searchParams: SearchP
                       <span className="font-semibold">Biblioteca:</span> {book.library.name} ({book.library.code})
                     </p>
                     <p>
-                      <span className="font-semibold">Disponibilidade:</span> {book.available_copies}/{book.total_copies}
+                      <span className="font-semibold">Disponibilidade:</span> {book.available_copies} de {book.total_copies} exemplar(es)
                     </p>
-                    <p className={book.available ? 'font-semibold text-emerald-700' : 'font-semibold text-rose-700'}>
-                      {book.available ? 'Disponível' : 'Indisponível'}
+                    <p className={book.status === 'available' ? 'font-semibold text-emerald-700' : 'font-semibold text-rose-700'}>
+                      {book.status === 'available' ? 'Disponível para empréstimo' : 'Indisponível no momento'}
                     </p>
                     <Link href={`/opac/${tenant}/book/${book.id}`} className="inline-flex rounded-md bg-slate-900 px-3 py-2 text-xs font-semibold text-white">
                       Ver detalhes

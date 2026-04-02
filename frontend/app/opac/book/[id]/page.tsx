@@ -92,11 +92,12 @@ export default async function OPACBookPage({
 
           <dl className="grid gap-2 text-sm text-slate-700 sm:grid-cols-2">
             <div><dt className="font-semibold">Autor</dt><dd>{book.author}</dd></div>
+            <div><dt className="font-semibold">Assunto</dt><dd>{book.subject ?? 'N/A'}</dd></div>
             <div><dt className="font-semibold">Edição</dt><dd>{book.edition ?? 'N/A'}</dd></div>
             <div><dt className="font-semibold">Ano</dt><dd>{book.publication_year ?? 'N/A'}</dd></div>
             <div><dt className="font-semibold">Biblioteca de origem</dt><dd>{book.library.name} ({book.library.code})</dd></div>
             <div><dt className="font-semibold">Exemplares</dt><dd>{book.available_copies}/{book.total_copies}</dd></div>
-            <div><dt className="font-semibold">Status</dt><dd className={book.available ? 'text-emerald-700 font-semibold' : 'text-rose-700 font-semibold'}>{book.available ? 'Disponível' : 'Indisponível'}</dd></div>
+            <div><dt className="font-semibold">Status</dt><dd className={book.status === 'available' ? 'text-emerald-700 font-semibold' : 'text-rose-700 font-semibold'}>{book.status === 'available' ? 'Disponível' : 'Indisponível'}</dd></div>
           </dl>
 
           <div>
@@ -115,8 +116,8 @@ export default async function OPACBookPage({
                 <li key={`${holding.library.tenant_slug}-${holding.library.id}`} className="rounded-lg border border-slate-200 p-3 text-sm">
                   <p className="font-semibold text-slate-800">{holding.library.name} ({holding.library.code})</p>
                   <p className="text-slate-600">Tenant: {holding.library.tenant_name} ({holding.library.tenant_slug})</p>
-                  <p className={holding.available ? 'font-semibold text-emerald-700' : 'font-semibold text-rose-700'}>
-                    {holding.available_copies}/{holding.total_copies} disponível(is)
+                  <p className={holding.status === 'available' ? 'font-semibold text-emerald-700' : 'font-semibold text-rose-700'}>
+                    {holding.available_copies}/{holding.total_copies} disponível(is) - {holding.status === 'available' ? 'Disponível' : 'Indisponível'}
                   </p>
                 </li>
               ))}

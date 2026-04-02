@@ -20,6 +20,7 @@ class OPACBookListItem(BaseModel):
     available: bool
     total_copies: int
     available_copies: int
+    status: str
     library: OPACLibraryInfo
 
 
@@ -35,6 +36,7 @@ class OPACHoldingLibrary(BaseModel):
     total_copies: int
     available_copies: int
     available: bool
+    status: str
 
 
 class OPACBookDetailResponse(BaseModel):
@@ -43,6 +45,7 @@ class OPACBookDetailResponse(BaseModel):
     subtitle: str | None = None
     author: str
     isbn: str | None = None
+    subject: str | None = None
     subjects: list[str] = Field(default_factory=list)
     publication_year: int | None = None
     edition: str | None = None
@@ -50,5 +53,6 @@ class OPACBookDetailResponse(BaseModel):
     available: bool
     total_copies: int
     available_copies: int
+    status: str
     library: OPACLibraryInfo
     libraries: list[OPACHoldingLibrary] = Field(default_factory=list)

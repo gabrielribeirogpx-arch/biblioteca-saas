@@ -1,11 +1,12 @@
 from __future__ import annotations
 
-from sqlalchemy import case, cast, func, or_, select, String
+from sqlalchemy import and_, case, cast, func, or_, select, String
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.book import Book
-from app.models.copy import Copy, CopyStatus
+from app.models.copy import Copy
 from app.models.library import Library
+from app.models.loan import Loan, LoanStatus
 from app.models.tenant import Tenant
 from app.schemas.opac import (
     OPACBookDetailResponse,
@@ -45,6 +46,17 @@ class PublicCatalogService:
         )
 
     @staticmethod
+    def _subject_label(subjects: list[str] | None) -> str | None:
+        if not subjects:
+            return None
+        valid = [subject.strip() for subject in subjects if subject and subject.strip()]
+        return ", ".join(valid) if valid else None
+
+    @staticmethod
+    def _availability_status(available_copies: int) -> str:
+        return "available" if available_copies > 0 else "unavailable"
+
+    @staticmethod
     async def list_books(
         db: AsyncSession,
         *,
@@ -59,12 +71,23 @@ class PublicCatalogService:
         safe_page_size = max(1, min(page_size, 100))
         offset = (safe_page - 1) * safe_page_size
 
-        available_case = case((Copy.status == CopyStatus.AVAILABLE, 1), else_=0)
+        active_loan_case = case((Loan.id.is_not(None), 1), else_=0)
         copy_stats_subquery = (
             select(
                 Copy.book_id.label("book_id"),
                 func.count(Copy.id).label("total_copies"),
-                func.coalesce(func.sum(available_case), 0).label("available_copies"),
+                func.greatest(
+                    func.count(Copy.id) - func.coalesce(func.sum(active_loan_case), 0),
+                    0,
+                ).label("available_copies"),
+            )
+            .outerjoin(
+                Loan,
+                and_(
+                    Loan.copy_id == Copy.id,
+                    Loan.library_id == Copy.library_id,
+                    Loan.status.in_([LoanStatus.ACTIVE, LoanStatus.OVERDUE]),
+                ),
             )
             .group_by(Copy.book_id)
             .subquery()
@@ -126,6 +149,7 @@ class PublicCatalogService:
                     available=available_copies > 0,
                     total_copies=int(row.total_copies or 0),
                     available_copies=available_copies,
+                    status=PublicCatalogService._availability_status(available_copies),
                     library=PublicCatalogService._library_info(row),
                 )
             )
@@ -134,7 +158,7 @@ class PublicCatalogService:
 
     @staticmethod
     async def get_book(db: AsyncSession, book_id: int, *, tenant_id: int) -> OPACBookDetailResponse | None:
-        available_case = case((Copy.status == CopyStatus.AVAILABLE, 1), else_=0)
+        active_loan_case = case((Loan.id.is_not(None), 1), else_=0)
 
         row = (
             await db.execute(
@@ -156,11 +180,22 @@ class PublicCatalogService:
                     Tenant.name.label("tenant_name"),
                     Tenant.slug.label("tenant_slug"),
                     func.count(Copy.id).label("total_copies"),
-                    func.coalesce(func.sum(available_case), 0).label("available_copies"),
+                    func.greatest(
+                        func.count(Copy.id) - func.coalesce(func.sum(active_loan_case), 0),
+                        0,
+                    ).label("available_copies"),
                 )
                 .join(Library, Library.id == Book.library_id)
                 .join(Tenant, Tenant.id == Library.tenant_id)
                 .outerjoin(Copy, Copy.book_id == Book.id)
+                .outerjoin(
+                    Loan,
+                    and_(
+                        Loan.copy_id == Copy.id,
+                        Loan.library_id == Copy.library_id,
+                        Loan.status.in_([LoanStatus.ACTIVE, LoanStatus.OVERDUE]),
+                    ),
+                )
                 .where(Book.id == book_id, Library.is_active.is_(True), Library.tenant_id == tenant_id)
                 .group_by(Book.id, Library.id, Tenant.id)
             )
@@ -178,11 +213,22 @@ class PublicCatalogService:
                 Tenant.name.label("tenant_name"),
                 Tenant.slug.label("tenant_slug"),
                 func.count(Copy.id).label("total_copies"),
-                func.coalesce(func.sum(available_case), 0).label("available_copies"),
+                func.greatest(
+                    func.count(Copy.id) - func.coalesce(func.sum(active_loan_case), 0),
+                    0,
+                ).label("available_copies"),
             )
             .join(Library, Library.id == Book.library_id)
             .join(Tenant, Tenant.id == Library.tenant_id)
             .outerjoin(Copy, Copy.book_id == Book.id)
+            .outerjoin(
+                Loan,
+                and_(
+                    Loan.copy_id == Copy.id,
+                    Loan.library_id == Copy.library_id,
+                    Loan.status.in_([LoanStatus.ACTIVE, LoanStatus.OVERDUE]),
+                ),
+            )
             .where(Library.is_active.is_(True), Library.tenant_id == tenant_id)
         )
 
@@ -202,6 +248,7 @@ class PublicCatalogService:
                     total_copies=int(library_row.total_copies or 0),
                     available_copies=available_copies,
                     available=available_copies > 0,
+                    status=PublicCatalogService._availability_status(available_copies),
                 )
             )
 
@@ -212,6 +259,7 @@ class PublicCatalogService:
             subtitle=row.subtitle,
             author=PublicCatalogService._author_label(row.authors),
             isbn=row.isbn,
+            subject=PublicCatalogService._subject_label(row.subjects),
             subjects=row.subjects or [],
             publication_year=row.publication_year,
             edition=row.edition,
@@ -219,6 +267,7 @@ class PublicCatalogService:
             available=available_copies > 0,
             total_copies=int(row.total_copies or 0),
             available_copies=available_copies,
+            status=PublicCatalogService._availability_status(available_copies),
             library=PublicCatalogService._library_info(row),
             libraries=libraries,
         )

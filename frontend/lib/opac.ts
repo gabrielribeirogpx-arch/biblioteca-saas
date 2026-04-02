@@ -19,6 +19,7 @@ export interface OPACBookListItem {
   available: boolean;
   total_copies: number;
   available_copies: number;
+  status: string;
   library: OPACLibraryInfo;
 }
 
@@ -34,6 +35,7 @@ export interface OPACHoldingLibrary {
   total_copies: number;
   available_copies: number;
   available: boolean;
+  status: string;
 }
 
 export interface OPACBookDetail {
@@ -42,6 +44,7 @@ export interface OPACBookDetail {
   subtitle?: string | null;
   author: string;
   isbn?: string | null;
+  subject?: string | null;
   subjects: string[];
   publication_year?: number | null;
   edition?: string | null;
@@ -49,6 +52,7 @@ export interface OPACBookDetail {
   available: boolean;
   total_copies: number;
   available_copies: number;
+  status: string;
   library: OPACLibraryInfo;
   libraries: OPACHoldingLibrary[];
 }
