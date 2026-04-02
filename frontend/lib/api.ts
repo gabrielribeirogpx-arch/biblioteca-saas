@@ -346,11 +346,10 @@ export async function apiFetch<T = unknown>(url: string, options: RequestInit = 
     headers.set('Accept', 'application/json');
   }
 
-  if (url.startsWith('/api/v1/')) {
-    if (libraryId && !headers.has('X-Library-ID')) {
-      headers.set('X-Library-ID', libraryId);
-      headers.set('x-library-id', libraryId);
-    }
+  const isAuthenticatedApiRequest = url.startsWith('/api/') && !url.startsWith('/api/public/') && !url.startsWith('/api/v1/auth/login');
+  if (token && isAuthenticatedApiRequest && libraryId && !headers.has('X-Library-ID')) {
+    headers.set('X-Library-ID', libraryId);
+    headers.set('x-library-id', libraryId);
   }
 
   if (token && !headers.has('Authorization')) {
