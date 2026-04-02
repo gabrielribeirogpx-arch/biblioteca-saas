@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
-import { UserMenu } from '../components/UserMenu';
+
 import './globals.css';
-import { Providers } from './providers';
+import { AppShell } from './AppShell';
 
 export const metadata: Metadata = {
   title: 'Biblioteca SaaS',
@@ -12,12 +12,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en">
       <body className="relative">
-        <Providers>
-          <div className="absolute top-4 right-6">
-            <UserMenu />
-          </div>
-          {children}
-        </Providers>
+        <AppShell>{children}</AppShell>
       </body>
     </html>
   );
