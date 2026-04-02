@@ -82,12 +82,20 @@ async def create_library(
     return LibraryListItem.model_validate(library)
 
 
-@router.get("", response_model=list[LibraryListItem], dependencies=[Depends(get_current_user)])
+@router.get("", response_model=list[LibraryListItem])
 async def list_libraries(
     db: AsyncSession = Depends(get_db),
-    current_user=Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ) -> list[LibraryListItem]:
-    libraries = await LibraryService.list_libraries(db, tenant_id=current_user.tenant_id)
+    print("USER ROLE:", current_user.role)
+    print("TENANT:", current_user.tenant_id)
+
+    result = await db.execute(
+        select(Library)
+        .where(Library.tenant_id == current_user.tenant_id)
+        .order_by(Library.name.asc())
+    )
+    libraries = list(result.scalars().all())
 
     for library in libraries:
         _assert_library_tenant_scope(library, current_user.tenant_id)
