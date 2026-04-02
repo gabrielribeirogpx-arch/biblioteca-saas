@@ -14,7 +14,7 @@ async def search_books(
     auth: User = Depends(require_user),
 ) -> list[SearchResult]:
     return SearchService.search_books(
-        tenant_id=tenant.tenant_id,
+        tenant_id=str(tenant.tenant_id),
         query=payload.q,
         filters=payload.filters,
         must_terms=payload.must_terms,

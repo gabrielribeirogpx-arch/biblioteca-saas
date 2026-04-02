@@ -172,13 +172,19 @@ function clearStoredAuthState() {
 }
 
 export function getStoredTenantId(): string {
+  const token = getStoredToken();
+  const claims = token ? parseJwtClaims(token) : null;
+  const tokenTenantId = claims?.tenant_id;
+  if (tokenTenantId != null) {
+    return String(tokenTenantId);
+  }
+
   if (typeof window === 'undefined') {
     return process.env.NEXT_PUBLIC_DEFAULT_TENANT_ID ?? DEFAULT_TENANT_ID;
   }
 
   return (
-    window.localStorage.getItem('tenant')
-    ?? window.localStorage.getItem('tenant_id')
+    window.localStorage.getItem('tenant_id')
     ?? process.env.NEXT_PUBLIC_DEFAULT_TENANT_ID
     ?? DEFAULT_TENANT_ID
   );
@@ -201,7 +207,6 @@ export function setStoredTenantId(tenantId: string) {
   }
 
   const normalizedTenantId = tenantId.trim();
-  window.localStorage.setItem('tenant', normalizedTenantId);
   window.localStorage.setItem('tenant_id', normalizedTenantId);
 }
 
@@ -268,7 +273,7 @@ function buildUrl(baseUrl: string, endpoint: string): string {
 
 export async function apiFetch<T = unknown>(url: string, options: RequestInit = {}): Promise<T | null> {
   const token = getStoredToken();
-  const libraryId = getStoredLibraryId();
+  let libraryId = getStoredLibraryId();
   const isProtectedEndpoint = url.startsWith('/api/v1/') && !url.startsWith('/api/v1/auth/login');
   const isLibraryListingEndpoint = url === '/api/v1/libraries' || url.startsWith('/api/v1/libraries?');
   const isLibrarySwitchEndpoint = url === '/api/v1/auth/switch-library';
@@ -278,7 +283,13 @@ export async function apiFetch<T = unknown>(url: string, options: RequestInit = 
   }
 
   if (isProtectedEndpoint && !isLibraryListingEndpoint && !isLibrarySwitchEndpoint && !libraryId) {
-    throw new ApiError('Selecione uma biblioteca', 400, 'library_id is required');
+    const fallbackLibraries = await apiFetch<LibraryOption[]>('/api/v1/libraries');
+    if (fallbackLibraries?.length) {
+      libraryId = String(fallbackLibraries[0].id);
+      setStoredLibraryId(libraryId);
+    } else {
+      throw new ApiError('Selecione uma biblioteca', 400, 'library_id is required');
+    }
   }
 
   const headers = new Headers(options.headers);

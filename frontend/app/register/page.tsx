@@ -3,7 +3,7 @@
 import { useRouter } from 'next/navigation';
 import { FormEvent, useState } from 'react';
 
-import { apiFetch, setStoredTenantId } from '../../lib/api';
+import { apiFetch } from '../../lib/api';
 
 interface RegisterResponse {
   success: boolean;
@@ -86,8 +86,7 @@ export default function RegisterPage() {
         window.localStorage.setItem('user_email', email);
       }
 
-      setStoredTenantId(data.tenant_slug);
-      router.replace(`/t/${data.tenant_slug}/dashboard`);
+      router.replace('/dashboard');
     } catch (submitError) {
       setError(submitError instanceof Error ? submitError.message : 'Erro ao criar conta');
     } finally {

@@ -7,8 +7,6 @@ import logging
 from fastapi import Depends, Header, HTTPException, Request, status
 import jwt
 from sqlalchemy import select
-from sqlalchemy import text
-from sqlalchemy.exc import ProgrammingError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -16,51 +14,21 @@ from app.core.config import settings
 from app.db.session import AsyncSessionLocal
 from app.models.audit_log import AuditActorType, AuditCategory
 from app.models.library import Library
-from app.models.tenant import Tenant
 from app.models.user import User
 from app.models.user import UserRole
 from app.services.audit_service import AuditService
-from app.utils.slug import normalize_slug
 
 
-DEFAULT_TENANT_CODE = "default"
 logger = logging.getLogger("app.request")
 
 
 @dataclass(slots=True)
 class TenantContext:
-    tenant_id: str
+    tenant_id: int
     organization_id: int
     organization_slug: str
     library_id: int
     library_code: str
-
-
-async def _resolve_library_from_tenant_key(db: AsyncSession, tenant_key: str) -> Library | None:
-    def _build_query():
-        return (
-            select(Library)
-            .join(Tenant, Tenant.id == Library.tenant_id)
-            .options(selectinload(Library.organization))
-            .options(selectinload(Library.tenant))
-            .where(Tenant.slug == tenant_key)
-            .order_by(Library.id.asc())
-        )
-
-    try:
-        library = (await db.execute(_build_query())).scalars().first()
-    except ProgrammingError as exc:
-        error_message = str(getattr(exc, "orig", exc)).lower()
-        if "libraries.is_active" not in error_message and "is_active" not in error_message:
-            raise
-        await db.rollback()
-        await db.execute(text("ALTER TABLE libraries ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT TRUE"))
-        await db.commit()
-        library = (await db.execute(_build_query())).scalars().first()
-
-    if library:
-        return library
-    return None
 
 
 @dataclass(slots=True)
@@ -80,56 +48,13 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
         yield db
 
 
-def _extract_subdomain(host: str | None) -> str | None:
-    if not host:
-        return None
-
-    hostname = host.split(":", 1)[0].strip().lower()
-    if not hostname:
-        return None
-
-    parts = hostname.split(".")
-
-    if hostname.endswith(".localhost") and len(parts) >= 2:
-        return parts[0]
-
-    if len(parts) >= 3:
-        return parts[0]
-
-    return None
-
-
 async def resolve_tenant(
     request: Request,
     db: AsyncSession = Depends(get_db),
-    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
-    x_tenant_slug: str | None = Header(default=None, alias="X-Tenant-Slug"),
     x_library_id: str | None = Header(default=None, alias="X-Library-ID"),
-    tenant_query: str | None = None,
 ) -> TenantContext:
-    tenant_key = (
-        x_tenant_slug
-        or x_tenant_id
-        or tenant_query
-        or _extract_subdomain(request.headers.get("host"))
-        or DEFAULT_TENANT_CODE
-    ).strip()
-    tenant_key = normalize_slug(tenant_key)
-    if not tenant_key:
-        tenant_key = DEFAULT_TENANT_CODE
-    logger.info("tenant.resolve requested tenant_key=%s", tenant_key)
-
-    library = await _resolve_library_from_tenant_key(db, tenant_key)
-    if not library and tenant_key != DEFAULT_TENANT_CODE:
-        logger.warning("tenant.resolve miss for tenant_key=%s; attempting fallback=%s", tenant_key, DEFAULT_TENANT_CODE)
-        library = await _resolve_library_from_tenant_key(db, DEFAULT_TENANT_CODE)
-
-    if not library:
-        logger.error("tenant.resolve failed; default tenant unavailable")
-        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Default tenant is unavailable")
-
     if x_library_id and x_library_id.strip().isdigit():
-        forced_library = (
+        library = (
             await db.execute(
                 select(Library)
                 .options(selectinload(Library.organization))
@@ -137,11 +62,21 @@ async def resolve_tenant(
                 .where(Library.id == int(x_library_id.strip()))
             )
         ).scalar_one_or_none()
-        if forced_library and forced_library.tenant_id == library.tenant_id:
-            library = forced_library
+    else:
+        library = (
+            await db.execute(
+                select(Library)
+                .options(selectinload(Library.organization))
+                .options(selectinload(Library.tenant))
+                .order_by(Library.id.asc())
+            )
+        ).scalars().first()
+
+    if not library:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="No library available")
 
     tenant_context = TenantContext(
-        tenant_id=library.tenant.slug,
+        tenant_id=library.tenant_id,
         organization_id=library.organization_id,
         organization_slug=library.organization.slug,
         library_id=library.id,
@@ -157,28 +92,11 @@ async def resolve_tenant(
     return tenant_context
 
 
-async def get_tenant_from_request(request: Request, db: AsyncSession) -> Library | None:
-    tenant_key = (
-        request.headers.get("X-Tenant-Slug")
-        or request.headers.get("X-Tenant-ID")
-    )
-    if not tenant_key:
-        return None
-
-    tenant_key = normalize_slug(tenant_key.strip())
-    if not tenant_key:
-        return None
-
-    return await _resolve_library_from_tenant_key(db, tenant_key)
-
-
 async def get_current_user(
     request: Request,
     db: AsyncSession = Depends(get_db),
 ):
     auth_header = request.headers.get("Authorization")
-    header_tenant_slug = request.headers.get("X-Tenant-Slug")
-    header_tenant_id = request.headers.get("X-Tenant-ID")
 
     if not auth_header:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing auth header")
@@ -215,30 +133,27 @@ async def get_current_user(
     if not user.is_active:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid authentication token")
 
-    if header_tenant_slug:
-        tenant_library = await _resolve_library_from_tenant_key(db, normalize_slug(header_tenant_slug.strip()))
-        if tenant_library and tenant_library.tenant_id != user.tenant_id:
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Tenant mismatch")
-
-    if header_tenant_id and header_tenant_id.strip().isdigit() and user.tenant_id is not None:
-        if int(header_tenant_id.strip()) != int(user.tenant_id):
+    token_tenant_id = payload.get("tenant_id")
+    if token_tenant_id is not None and user.tenant_id is not None:
+        if int(token_tenant_id) != int(user.tenant_id):
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Tenant mismatch")
 
     return user
 
 
-async def get_current_library(
+async def get_request_context(
     request: Request,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
     x_library_id: str | None = Header(default=None, alias="X-Library-ID"),
-) -> TenantContext:
-    if not x_library_id or not x_library_id.strip():
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="X-Library-ID header is required")
-    if not x_library_id.strip().isdigit():
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid X-Library-ID header")
+) -> TenantScopedContext:
+    requested_library_id = x_library_id or request.query_params.get("library_id")
+    if not requested_library_id:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="library_id obrigatório")
+    if not requested_library_id.strip().isdigit():
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid library_id")
 
-    library_id = int(x_library_id.strip())
+    library_id = int(requested_library_id.strip())
     library = (
         await db.execute(
             select(Library)
@@ -251,17 +166,26 @@ async def get_current_library(
         )
     ).scalar_one_or_none()
     if library is None:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Library access denied")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Library não encontrada")
+
+    if library.tenant_id != current_user.tenant_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Acesso negado")
 
     tenant_context = TenantContext(
-        tenant_id=library.tenant.slug,
+        tenant_id=library.tenant_id,
         organization_id=library.organization_id,
         organization_slug=library.organization.slug,
         library_id=library.id,
         library_code=library.code,
     )
     request.state.tenant_context = tenant_context
-    return tenant_context
+    return TenantScopedContext(user=current_user, tenant=tenant_context)
+
+
+async def get_current_library(
+    context: TenantScopedContext = Depends(get_request_context),
+) -> TenantContext:
+    return context.tenant
 
 
 async def get_current_tenant(
@@ -280,28 +204,9 @@ async def get_current_tenant(
 
 
 async def resolve_context(
-    request: Request,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-    tenant: TenantContext = Depends(get_current_library),
+    context: TenantScopedContext = Depends(get_request_context),
 ) -> TenantScopedContext:
-    user = (
-        await db.execute(
-            select(User).where(
-                User.email == current_user.email,
-                User.library_id == tenant.library_id,
-                User.tenant_id == current_user.tenant_id,
-                User.is_active.is_(True),
-            )
-        )
-    ).scalar_one_or_none()
-    if user is None:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Library access denied")
-    if user.role != current_user.role:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Library role mismatch")
-
-    request.state.tenant_context = tenant
-    return TenantScopedContext(user=user, tenant=tenant)
+    return context
 
 
 async def get_tenant_context(

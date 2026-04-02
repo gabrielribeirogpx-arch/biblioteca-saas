@@ -11,8 +11,7 @@ export function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
 
   const storedToken = typeof window !== 'undefined' ? window.localStorage.getItem('token') : null;
-  const storedTenant = typeof window !== 'undefined' ? window.localStorage.getItem('tenant') : null;
-  const canAccessRoute = (isAuthenticated || Boolean(storedToken)) && Boolean(storedTenant);
+  const canAccessRoute = isAuthenticated || Boolean(storedToken);
 
   useEffect(() => {
     if (isLoading) {
