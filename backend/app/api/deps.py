@@ -42,7 +42,6 @@ class AuthContext:
     user_id: int
     role: UserRole
     tenant_id: int
-    library_id: int
     organization_id: int | None
 
 
@@ -187,8 +186,40 @@ async def get_tenant_from_request(request: Request, db: AsyncSession) -> Library
     return await _resolve_library_from_tenant_key(db, tenant_key)
 
 
-def get_current_library(request: Request) -> str | None:
-    return request.headers.get("X-Library-ID")
+async def get_current_library(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    auth: AuthContext = Depends(get_auth_context),
+    x_library_id: str | None = Header(default=None, alias="X-Library-ID"),
+) -> TenantContext:
+    if not x_library_id or not x_library_id.strip():
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="X-Library-ID header is required")
+    if not x_library_id.strip().isdigit():
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid X-Library-ID header")
+
+    library_id = int(x_library_id.strip())
+    library = (
+        await db.execute(
+            select(Library)
+            .options(selectinload(Library.organization))
+            .where(
+                Library.id == library_id,
+                Library.tenant_id == auth.tenant_id,
+            )
+        )
+    ).scalar_one_or_none()
+    if library is None:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Library access denied")
+
+    tenant_context = TenantContext(
+        tenant_id=library.organization.slug,
+        organization_id=library.organization_id,
+        organization_slug=library.organization.slug,
+        library_id=library.id,
+        library_code=library.code,
+    )
+    request.state.tenant_context = tenant_context
+    return tenant_context
 
 
 _bearer = HTTPBearer(auto_error=False)
@@ -207,7 +238,6 @@ async def get_auth_context(
         user_id=payload.sub,
         role=payload.role,
         tenant_id=payload.tenant_id,
-        library_id=payload.library_id,
         organization_id=payload.organization_id,
     )
     request.state.auth_context = auth_context
@@ -277,31 +307,10 @@ async def get_current_user(
 
 
 async def get_current_tenant(
-    request: Request,
-    db: AsyncSession = Depends(get_db),
-    x_tenant_id: str | None = Header(default=None, alias="X-Tenant-ID"),
-    x_tenant_slug: str | None = Header(default=None, alias="X-Tenant-Slug"),
-    current_library: str | None = Depends(get_current_library),
+    current_library: TenantContext = Depends(get_current_library),
     user=Depends(get_current_user),
 ) -> TenantContext:
-    tenant_key = (x_tenant_slug or x_tenant_id or str(user.library_id)).strip()
-    if current_library and current_library.strip().isdigit():
-        tenant_key = current_library.strip()
-    logger.info("tenant.current requested tenant_key=%s user_id=%s", tenant_key, user.id)
-
-    library = await _resolve_library_from_tenant_key(db, tenant_key)
-    if not library:
-        logger.error("tenant.current failed tenant_key=%s user_id=%s", tenant_key, user.id)
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tenant not found")
-
-    tenant_context = TenantContext(
-        tenant_id=library.organization.slug,
-        organization_id=library.organization_id,
-        organization_slug=library.organization.slug,
-        library_id=library.id,
-        library_code=library.code,
-    )
-    request.state.tenant_context = tenant_context
+    tenant_context = current_library
     logger.info(
         "tenant.current success tenant=%s organization_id=%s library_id=%s user_id=%s",
         tenant_context.tenant_id,
@@ -316,7 +325,7 @@ async def resolve_context(
     request: Request,
     db: AsyncSession = Depends(get_db),
     auth: AuthContext = Depends(get_auth_context),
-    tenant: TenantContext = Depends(resolve_tenant),
+    tenant: TenantContext = Depends(get_current_library),
 ) -> TenantScopedContext:
     from app.models.user import User
 
@@ -327,7 +336,6 @@ async def resolve_context(
         await db.execute(
             select(User).where(
                 User.id == auth.user_id,
-                User.library_id == auth.library_id,
                 User.tenant_id == auth.tenant_id,
                 User.is_active.is_(True),
             )

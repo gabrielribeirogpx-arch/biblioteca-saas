@@ -233,7 +233,6 @@ class TenantService:
                     sub=admin_user.id,
                     role=admin_user.role,
                     tenant_id=tenant.tenant_id or tenant.organization_id,
-                    library_id=tenant.id,
                     tenant=tenant.code,
                     organization_id=tenant.organization_id,
                 )

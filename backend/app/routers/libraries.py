@@ -3,7 +3,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import AuthContext, get_auth_context, get_current_user, get_db, require_admin
+from app.api.deps import AuthContext, TenantContext, get_auth_context, get_current_library, get_current_user, get_db, require_admin
 from app.models.library import Library
 from app.models.library_policy import LibraryPolicy
 from app.models.user import User
@@ -47,6 +47,7 @@ async def create_library(
     payload: CreateLibraryRequest,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
+    current_library: TenantContext = Depends(get_current_library),
     _auth: AuthContext = Depends(require_admin),
 ) -> LibraryListItem:
     if current_user is None:
@@ -58,7 +59,7 @@ async def create_library(
     source_library = (
         await db.execute(
             select(Library).where(
-                Library.id == current_user.library_id,
+                Library.id == current_library.library_id,
                 Library.tenant_id == current_user.tenant_id,
             )
         )
