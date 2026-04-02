@@ -4,15 +4,12 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState } 
 
 import {
   apiFetch,
-  getStoredLibraryId,
-  getStoredTenantId,
   getStoredToken,
-  setStoredLibraryId,
-  setStoredTenantId,
   setStoredToken,
   switchLibrary,
   type UserRole
 } from '../lib/api';
+import { useLibrary } from './LibraryContext';
 
 interface AuthUser {
   id: number;
@@ -23,9 +20,6 @@ interface AuthUser {
 interface LoginResponse {
   access_token?: string;
   user?: AuthUser;
-  tenant?: {
-    slug?: string;
-  };
 }
 
 interface AuthContextValue {
@@ -97,10 +91,10 @@ function parseStoredUser(): AuthUser | null {
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
+  const library = useLibrary();
   const [token, setToken] = useState<string | null>(null);
   const [user, setUser] = useState<AuthUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [libraryId, setLibraryIdState] = useState<string | null>(null);
 
   useEffect(() => {
     if (typeof window === 'undefined') {
@@ -110,23 +104,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const storedToken = getStoredToken();
     const storedUser = parseStoredUser();
-    const storedLibraryId = getStoredLibraryId();
     setToken(storedToken);
     if (storedToken && storedUser) {
       setUser(storedUser);
     } else {
       setUser(null);
     }
-    setLibraryIdState(storedLibraryId);
+    const claims = storedToken ? parseTokenClaims(storedToken) : null;
+    if (claims?.library_id != null) {
+      library.setLibraryId(String(claims.library_id));
+    }
     setIsLoading(false);
-  }, []);
+  }, [library]);
 
   const logout = useCallback(() => {
     if (typeof window !== 'undefined') {
       window.localStorage.removeItem('access_token');
       window.localStorage.removeItem('token');
-      window.localStorage.removeItem('tenant');
-      window.localStorage.removeItem('tenant_id');
       window.localStorage.removeItem('user_email');
       window.localStorage.removeItem('library_id');
       window.dispatchEvent(new Event('auth:logout'));
@@ -135,8 +129,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     setToken(null);
     setUser(null);
-    setLibraryIdState(null);
-  }, []);
+    library.setLibraryId(null);
+  }, [library]);
 
   useEffect(() => {
     if (typeof window === 'undefined') {
@@ -156,16 +150,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const updatedToken = await switchLibrary(normalizedLibraryId);
     setToken(updatedToken);
-    setStoredLibraryId(normalizedLibraryId);
-    setLibraryIdState(normalizedLibraryId);
+    library.setLibraryId(normalizedLibraryId);
     if (options?.reload && typeof window !== 'undefined') {
       window.location.reload();
     }
-  }, []);
+  }, [library]);
 
-  const login = useCallback(async (email: string, password: string, tenantId?: string, requestedLibraryId?: string) => {
-    const resolvedTenantId = (tenantId ?? getStoredTenantId()).trim();
-    const resolvedLibraryId = requestedLibraryId?.trim() || getStoredLibraryId() || '';
+  const login = useCallback(async (email: string, password: string, _tenantId?: string, requestedLibraryId?: string) => {
+    const resolvedLibraryId = requestedLibraryId?.trim() || library.libraryId || '';
     const sanitizedEmail = email.trim();
     const sanitizedPassword = password;
     let data: LoginResponse | null = null;
@@ -176,7 +168,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           'Content-Type': 'application/json',
           ...(resolvedLibraryId ? { 'X-Library-ID': resolvedLibraryId } : {})
         },
-        body: JSON.stringify({ email: sanitizedEmail, password: sanitizedPassword, tenant: resolvedTenantId })
+        body: JSON.stringify({ email: sanitizedEmail, password: sanitizedPassword })
       });
     } catch {
       throw new Error('Credenciais inválidas');
@@ -189,11 +181,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
     const normalizedToken = data.access_token.trim().replace(/^Bearer\s+/i, '');
     const payload = parseTokenClaims(normalizedToken);
-    const tokenTenantId = payload?.tenant_id != null ? String(payload.tenant_id) : null;
-    const responseTenantSlug = data.tenant?.slug?.trim();
     if (payload?.library_id) {
-      setStoredLibraryId(String(payload.library_id));
-      setLibraryIdState(String(payload.library_id));
+      library.setLibraryId(String(payload.library_id));
     }
 
     if (typeof window !== 'undefined') {
@@ -201,7 +190,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       console.log('TOKEN SAVED', window.localStorage.getItem('token'));
       window.localStorage.setItem('user', JSON.stringify(data.user));
       window.localStorage.setItem('user_email', data.user.email);
-      setStoredTenantId(responseTenantSlug || tokenTenantId || resolvedTenantId);
     }
 
     setToken(normalizedToken);
@@ -210,11 +198,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       email: data.user.email,
       role: data.user.role ?? resolveRole(normalizedToken) ?? 'member'
     });
-  }, []);
+  }, [library]);
 
   const value = useMemo(
-    () => ({ user, token, role: user?.role ?? null, libraryId, setLibraryId, isAuthenticated: Boolean(token && user), isLoading, login, logout }),
-    [user, token, libraryId, setLibraryId, isLoading, login, logout]
+    () => ({ user, token, role: user?.role ?? null, libraryId: library.libraryId, setLibraryId, isAuthenticated: Boolean(token && user), isLoading, login, logout }),
+    [user, token, library.libraryId, setLibraryId, isLoading, login, logout]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

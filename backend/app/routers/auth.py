@@ -5,11 +5,9 @@ from sqlalchemy.orm import selectinload
 
 from app.api.deps import get_current_user, get_db
 from app.models.library import Library
-from app.models.tenant import Tenant
 from app.models.user import User
 from app.schemas.auth import AccessTokenResponse, LoginRequest, SwitchLibraryRequest, TokenPayload, TokenResponse
 from app.services.auth_service import AuthService
-from app.utils.slug import normalize_slug
 
 router = APIRouter()
 
@@ -21,29 +19,16 @@ async def login(
     db: AsyncSession = Depends(get_db),
 ) -> TokenResponse:
     try:
-        tenant = (
-            request.headers.get("X-Tenant-ID")
-            or request.headers.get("X-Tenant-Slug")
-            or body.tenant
-        )
         library_id = request.headers.get("X-Library-ID")
-        if not tenant or not tenant.strip():
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Tenant obrigatório")
-
-        tenant = normalize_slug(tenant.strip())
-        query = (
-            select(Library)
-            .options(selectinload(Library.tenant))
-            .join(Tenant, Tenant.id == Library.tenant_id)
-            .where(Tenant.slug == tenant)
-            .order_by(Library.id.asc())
-        )
+        query = select(Library).options(selectinload(Library.tenant)).order_by(Library.id.asc())
         if library_id and library_id.strip().isdigit():
             query = query.where(Library.id == int(library_id.strip()))
+        elif body.tenant and body.tenant.strip().isdigit():
+            query = query.where(Library.tenant_id == int(body.tenant.strip()))
         library = (await db.execute(query)).scalars().first()
 
         if not library:
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Tenant não encontrado")
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Biblioteca não encontrada")
 
         return await AuthService.login(db, body, library)
     except HTTPException:
@@ -77,7 +62,7 @@ async def switch_library(
     token_payload = TokenPayload(
         sub=current_user.id,
         tenant_id=current_user.tenant_id or library.tenant_id,
-        tenant=library.tenant.slug,
+        tenant=str(current_user.tenant_id or library.tenant_id),
         library_id=library.id,
         role=current_user.role,
         organization_id=library.organization_id,

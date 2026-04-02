@@ -14,9 +14,6 @@ from app.models.library import Library
 from app.models.user import User
 from app.schemas.auth import LoginRequest, LoginUser, TokenPayload, TokenResponse
 from app.services.audit_service import AuditService
-from app.utils.slug import normalize_slug
-
-
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24  # 24 horas
 
 
@@ -34,13 +31,13 @@ class AuthService:
 
     @staticmethod
     def create_access_token(payload: TokenPayload) -> str:
-        normalized_tenant = normalize_slug(payload.tenant)
+        tenant_claim = str(payload.tenant_id)
         to_encode = {
             # RFC 7519 expects "sub" as a string. PyJWT validates this claim type on decode.
             "sub": str(payload.sub),
             "role": payload.role.value,
             "tenant_id": payload.tenant_id,
-            "tenant": normalized_tenant,
+            "tenant": tenant_claim,
             "library_id": payload.library_id,
             "organization_id": payload.organization_id,
         }
@@ -67,7 +64,7 @@ class AuthService:
                 sub=int(decoded["sub"]),
                 role=decoded["role"],
                 tenant_id=int(decoded["tenant_id"]),
-                tenant=str(decoded["tenant"]),
+                tenant=str(decoded.get("tenant")) if decoded.get("tenant") is not None else None,
                 library_id=int(decoded["library_id"]) if decoded.get("library_id") is not None else None,
                 organization_id=int(decoded["organization_id"]) if decoded.get("organization_id") is not None else None,
             )
@@ -131,7 +128,7 @@ class AuthService:
                 sub=user.id,
                 role=user.role,
                 tenant_id=user.tenant_id or tenant.tenant_id or tenant.organization_id,
-                tenant=tenant.tenant.slug,
+                tenant=str(user.tenant_id or tenant.tenant_id or tenant.organization_id),
                 library_id=tenant.id,
                 organization_id=tenant.organization_id,
             )

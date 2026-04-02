@@ -14,7 +14,7 @@ class TokenPayload(BaseModel):
     sub: int
     role: UserRole
     tenant_id: int
-    tenant: str
+    tenant: str | None = None
     library_id: int | None = None
     organization_id: int | None = None
 

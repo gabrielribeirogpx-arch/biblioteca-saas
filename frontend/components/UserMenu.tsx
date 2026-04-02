@@ -45,7 +45,6 @@ export function UserMenu() {
   const [isOpen, setIsOpen] = useState(false);
   const [email, setEmail] = useState('');
   const [name, setName] = useState('');
-  const [tenant, setTenant] = useState('');
   const [tenantId, setTenantId] = useState('');
   const [nextLibraryId, setNextLibraryId] = useState('');
   const [libraries, setLibraries] = useState<LibraryOption[]>([]);
@@ -55,7 +54,6 @@ export function UserMenu() {
       return;
     }
 
-    const storedTenant = window.localStorage.getItem('tenant') ?? window.localStorage.getItem('tenant_id') ?? '';
     const storedEmail = window.localStorage.getItem('user_email') ?? '';
     const rawUser = window.localStorage.getItem('user');
     const token = window.localStorage.getItem('access_token') ?? window.localStorage.getItem('token');
@@ -70,7 +68,6 @@ export function UserMenu() {
       }
     }
 
-    setTenant(storedTenant);
     setTenantId(parseTenantIdFromToken(token) ?? '');
     setNextLibraryId(libraryId ?? '');
     setEmail(parsedUser?.email ?? storedEmail);
@@ -157,7 +154,7 @@ export function UserMenu() {
         <div className="absolute right-0 z-50 mt-2 w-64 rounded-md border border-slate-200 bg-white p-3 shadow-lg">
           <p className="text-sm font-semibold text-slate-900">{displayName}</p>
           {email ? <p className="text-xs text-slate-600">{email}</p> : null}
-          {tenant ? <p className="mt-1 text-xs text-slate-500">Tenant: {tenant}</p> : null}
+          {tenantId ? <p className="mt-1 text-xs text-slate-500">Tenant ID: {tenantId}</p> : null}
           <div className="mt-2">
             <label className="text-xs text-slate-500">Biblioteca</label>
             {!libraryId ? <p className="mt-1 text-xs text-amber-700">Selecione uma biblioteca</p> : null}

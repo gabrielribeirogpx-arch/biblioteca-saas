@@ -24,12 +24,8 @@ function BookIcon() {
 
 export function RoleAwareNav({ role }: RoleAwareNavProps) {
   const pathname = usePathname();
-  const tenant = typeof window !== 'undefined' ? window.localStorage.getItem('tenant') : null;
   const items = navigationForRole(role);
-  const resolvedItems = useMemo(
-    () => items.map((item) => (item.href === '/dashboard' && tenant ? { ...item, href: `/t/${tenant}/dashboard` } : item)),
-    [items, tenant]
-  );
+  const resolvedItems = useMemo(() => items, [items]);
   const principalItems = resolvedItems.filter((item) => item.section !== 'administracao');
   const adminItems = resolvedItems.filter((item) => item.section === 'administracao');
 
