@@ -389,7 +389,15 @@ export async function getBooks(): Promise<Book[]> {
 }
 
 export async function getCopies(): Promise<Copy[]> {
-  return (await apiFetch<Copy[]>('/api/v1/copies/')) ?? [];
+  return (await apiFetch<Copy[]>('/api/v1/copies')) ?? [];
+}
+
+export async function searchCopies(query: string): Promise<Copy[]> {
+  const normalized = query.trim();
+  if (!normalized) {
+    return getCopies();
+  }
+  return (await apiFetch<Copy[]>(`/api/v1/copies/search?query=${encodeURIComponent(normalized)}`)) ?? [];
 }
 
 export async function getLoans(): Promise<Loan[]> {

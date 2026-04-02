@@ -1,4 +1,4 @@
-from sqlalchemy import select
+from sqlalchemy import String, cast, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.copy import Copy, CopyStatus
@@ -26,6 +26,40 @@ class CopyService:
     async def list_copies(db: AsyncSession, library_id: int, tenant_id: int) -> list[CopyOut]:
         result = await db.execute(
             select(Copy).where(Copy.library_id == library_id, Copy.tenant_id == tenant_id).order_by(Copy.id.asc())
+        )
+        copies = result.scalars().all()
+        return [
+            CopyOut(
+                id=copy.id,
+                book_id=copy.book_id,
+                barcode=copy.barcode,
+                available=copy.status == CopyStatus.AVAILABLE,
+            )
+            for copy in copies
+        ]
+
+    @staticmethod
+    async def search_copies(
+        db: AsyncSession,
+        library_id: int,
+        tenant_id: int,
+        query: str,
+    ) -> list[CopyOut]:
+        normalized_query = query.strip()
+        if not normalized_query:
+            return await CopyService.list_copies(db, library_id, tenant_id)
+
+        result = await db.execute(
+            select(Copy)
+            .where(
+                Copy.library_id == library_id,
+                Copy.tenant_id == tenant_id,
+                or_(
+                    Copy.barcode.ilike(f"%{normalized_query}%"),
+                    cast(Copy.id, String).ilike(f"%{normalized_query}%"),
+                ),
+            )
+            .order_by(Copy.id.asc())
         )
         copies = result.scalars().all()
         return [

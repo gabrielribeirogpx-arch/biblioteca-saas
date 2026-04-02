@@ -7,7 +7,7 @@ import { AppShell } from '../../components/ui/AppShell';
 import { DataTable } from '../../components/ui/DataTable';
 import { Toast } from '../../components/ui/Toast';
 import { useAuth } from '../../hooks/useAuth';
-import { apiFetch, getCopies, getUsers, type Copy, type Loan, type User } from '../../lib/api';
+import { apiFetch, getCopies, getUsers, searchCopies, type Copy, type Loan, type User } from '../../lib/api';
 
 interface LoanRow {
   [key: string]: string | number | null | undefined;
@@ -97,17 +97,23 @@ export default function LoansPage() {
     return () => window.clearTimeout(timeout);
   }, [successMessage]);
 
-  const filteredCopies = useMemo(() => {
-    const normalized = copySearch.trim().toLowerCase();
-    if (!normalized) {
-      return copies;
+  useEffect(() => {
+    if (!token) {
+      return;
     }
 
-    return copies.filter((copy) => {
-      const barcode = (copy.barcode ?? '').toLowerCase();
-      return barcode.includes(normalized) || String(copy.id).includes(normalized);
-    });
-  }, [copySearch, copies]);
+    const timeout = window.setTimeout(() => {
+      void searchCopies(copySearch)
+        .then((result) => setCopies(result))
+        .catch(() => {
+          setErrorMessage('Não foi possível buscar exemplares.');
+        });
+    }, 250);
+
+    return () => window.clearTimeout(timeout);
+  }, [copySearch, token]);
+
+  const filteredCopies = useMemo(() => copies, [copies]);
 
   const createLoan = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
