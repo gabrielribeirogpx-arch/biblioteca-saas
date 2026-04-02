@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import (
@@ -27,6 +27,16 @@ async def list_loans(
     auth: User = Depends(require_user),
 ) -> LoanListResponse:
     return await LoanService.list_loans(db, ctx.tenant.library_id, auth.tenant_id, page=page, page_size=page_size)
+
+
+@router.get("/{loan_id}", response_model=LoanOut, dependencies=[Depends(get_current_user)])
+async def get_loan(
+    loan_id: int,
+    db: AsyncSession = Depends(get_db),
+    ctx: TenantScopedContext = Depends(get_tenant_context),
+    auth: User = Depends(require_user),
+) -> LoanOut:
+    return await LoanService.get_loan(db, ctx.tenant.library_id, auth.tenant_id, loan_id)
 
 
 @router.post("/", response_model=LoanOut, dependencies=[Depends(get_current_user)])
@@ -82,6 +92,19 @@ async def renew_loan(
     return renewed
 
 
+@router.post("/renew", response_model=LoanOut, dependencies=[Depends(get_current_user)])
+async def renew_loan_alias(
+    payload: LoanRenewRequest,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    ctx: TenantScopedContext = Depends(get_tenant_context),
+    auth: User = Depends(require_librarian),
+) -> LoanOut:
+    if payload.loan_id is None:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="loan_id is required")
+    return await renew_loan(payload.loan_id, payload, request, db, ctx, auth)
+
+
 @router.post("/{loan_id}/return", response_model=LoanOut, dependencies=[Depends(get_current_user)])
 async def return_loan(
     loan_id: int,
@@ -106,3 +129,14 @@ async def return_loan(
         ip_address=request.client.host if request.client else None,
     )
     return returned
+
+
+@router.post("/returns/{loan_id}", response_model=LoanOut, dependencies=[Depends(get_current_user)])
+async def return_loan_alias(
+    loan_id: int,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    ctx: TenantScopedContext = Depends(get_tenant_context),
+    auth: User = Depends(require_librarian),
+) -> LoanOut:
+    return await return_loan(loan_id, request, db, ctx, auth)

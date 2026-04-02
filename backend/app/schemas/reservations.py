@@ -4,13 +4,14 @@ from pydantic import BaseModel
 
 
 class ReservationCreate(BaseModel):
-    copy_id: int
+    book_id: int
 
 
 class ReservationOut(BaseModel):
     id: int
     user_id: int
-    copy_id: int
+    book_id: int
+    copy_id: int | None = None
     position: int
     status: str
     reserved_at: datetime
