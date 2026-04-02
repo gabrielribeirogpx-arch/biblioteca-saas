@@ -109,7 +109,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       window.localStorage.removeItem('token');
       window.localStorage.removeItem('tenant');
       window.localStorage.removeItem('tenant_id');
-      window.localStorage.removeItem('user');
       window.localStorage.removeItem('user_email');
       window.localStorage.removeItem('library_id');
       window.dispatchEvent(new Event('auth:logout'));
@@ -160,6 +159,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       throw new Error('Credenciais inválidas');
     }
 
+    console.log('LOGIN RESPONSE', data);
+
     if (!data?.access_token || !data?.user) {
       throw new Error('Token de acesso não retornado pela API');
     }
@@ -172,9 +173,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     if (typeof window !== 'undefined') {
-      window.localStorage.removeItem('user');
       window.localStorage.setItem('access_token', normalizedToken);
       window.localStorage.setItem('token', normalizedToken);
+      console.log('TOKEN SAVED', window.localStorage.getItem('token'));
       window.localStorage.setItem('user', JSON.stringify(data.user));
       window.localStorage.setItem('user_email', data.user.email);
       setStoredTenantId(tokenTenantId ?? resolvedTenantId);
