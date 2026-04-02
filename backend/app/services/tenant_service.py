@@ -15,6 +15,7 @@ from app.models.user import User, UserRole
 from app.schemas.auth import RegisterRequest, RegisterResponse, TokenPayload
 from app.schemas.tenants import TenantCreate
 from app.services.auth_service import AuthService
+from app.services.rbac_service import RBACService
 from app.utils.slug import normalize_slug
 
 
@@ -126,6 +127,8 @@ class TenantService:
             is_active=True,
         )
         db.add(admin)
+        await db.flush()
+        await RBACService.ensure_user_bindings(db, admin)
         await db.commit()
         await db.refresh(admin)
         return admin
@@ -220,6 +223,8 @@ class TenantService:
             )
             admin_user.library_id = tenant.id
             db.add(admin_user)
+            await db.flush()
+            await RBACService.ensure_user_bindings(db, admin_user)
             await db.commit()
             await db.refresh(admin_user)
 

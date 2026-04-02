@@ -17,12 +17,14 @@ class TokenPayload(BaseModel):
     tenant: str | None = None
     library_id: int | None = None
     organization_id: int | None = None
+    permissions: list[str] = Field(default_factory=list)
 
 
 class LoginUser(BaseModel):
     id: int
     email: str
     role: UserRole
+    permissions: list[str] = Field(default_factory=list)
 
 
 class TokenResponse(BaseModel):

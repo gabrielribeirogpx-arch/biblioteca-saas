@@ -1,9 +1,9 @@
 from fastapi import APIRouter, Depends, Query, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import TenantScopedContext, get_db, get_tenant_context, require_admin, require_user
-from app.models.user import User
+from app.api.deps import TenantScopedContext, get_db, get_tenant_context, require_permission
 from app.models.audit_log import AuditActorType, AuditCategory
+from app.models.user import User
 from app.schemas.users import UserCreate, UserListResponse, UserOut
 from app.services.audit_service import AuditService
 from app.services.users import UserService
@@ -17,7 +17,7 @@ async def list_users(
     page_size: int = Query(default=20, ge=1, le=100),
     db: AsyncSession = Depends(get_db),
     ctx: TenantScopedContext = Depends(get_tenant_context),
-    auth: User = Depends(require_user),
+    _: User = Depends(require_permission("users.read")),
 ) -> UserListResponse:
     return await UserService.list_users(db, ctx.tenant.library_id, page=page, page_size=page_size)
 
@@ -28,7 +28,7 @@ async def create_user(
     request: Request,
     db: AsyncSession = Depends(get_db),
     ctx: TenantScopedContext = Depends(get_tenant_context),
-    auth: User = Depends(require_admin),
+    auth: User = Depends(require_permission("users.create")),
 ) -> UserOut:
     created = await UserService.create_user(db, payload, ctx.tenant.library_id)
     await AuditService.log_event(

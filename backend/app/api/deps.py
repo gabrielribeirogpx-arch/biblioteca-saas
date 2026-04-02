@@ -17,6 +17,7 @@ from app.models.library import Library
 from app.models.user import User
 from app.models.user import UserRole
 from app.services.audit_service import AuditService
+from app.services.rbac_service import RBACService
 
 
 logger = logging.getLogger("app.request")
@@ -171,6 +172,9 @@ async def get_request_context(
     if library.tenant_id != current_user.tenant_id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Acesso negado")
 
+    if not await RBACService.user_has_library_access(db=db, user=current_user, library_id=library_id):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Acesso à biblioteca negado")
+
     tenant_context = TenantContext(
         tenant_id=library.tenant_id,
         organization_id=library.organization_id,
@@ -257,3 +261,42 @@ require_user = role_guard(
     UserRole.ASSISTANT,
     UserRole.MEMBER,
 )
+
+
+def require_permission(permission_code: str) -> Callable[..., User]:
+    async def dependency(
+        request: Request,
+        db: AsyncSession = Depends(get_db),
+        context: TenantScopedContext = Depends(get_tenant_context),
+    ) -> User:
+        current_user = context.user
+        has_permission = await RBACService.user_has_permission(
+            db=db,
+            user_id=current_user.id,
+            permission_code=permission_code,
+            tenant_id=context.tenant.tenant_id,
+            library_id=context.tenant.library_id,
+            fallback_role=current_user.role,
+        )
+        if not has_permission:
+            await AuditService.log_event(
+                db=db,
+                organization_id=context.tenant.organization_id,
+                library_id=context.tenant.library_id,
+                tenant_id=context.tenant.tenant_id,
+                category=AuditCategory.SECURITY,
+                actor_type=AuditActorType.USER,
+                actor_id=current_user.id,
+                action="rbac.permission_denied",
+                entity_type="permission",
+                entity_id=permission_code,
+                summary="Permission denied by permission guard",
+                payload={"permission_code": permission_code},
+                request_id=request.headers.get("x-request-id"),
+                ip_address=request.client.host if request.client else None,
+            )
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Insufficient permissions")
+
+        return current_user
+
+    return dependency

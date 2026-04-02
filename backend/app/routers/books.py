@@ -7,6 +7,7 @@ from app.api.deps import (
     get_db,
     get_tenant_context,
     require_librarian,
+    require_permission,
     require_user,
 )
 from app.models.user import User
@@ -53,7 +54,7 @@ async def create_book(
     request: Request,
     db: AsyncSession = Depends(get_db),
     ctx: TenantScopedContext = Depends(get_tenant_context),
-    auth: User = Depends(require_librarian),
+    auth: User = Depends(require_permission("books.create")),
 ) -> BookOut:
     created = await BookService.create_book(db, payload, ctx.tenant.library_id)
     await AuditService.log_event(

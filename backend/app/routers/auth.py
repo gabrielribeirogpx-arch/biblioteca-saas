@@ -8,6 +8,7 @@ from app.models.library import Library
 from app.models.user import User
 from app.schemas.auth import AccessTokenResponse, LoginRequest, SwitchLibraryRequest, TokenPayload, TokenResponse
 from app.services.auth_service import AuthService
+from app.services.rbac_service import RBACService
 
 router = APIRouter()
 
@@ -59,6 +60,19 @@ async def switch_library(
     if not library:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Library access denied")
 
+    if not await RBACService.user_has_library_access(db=db, user=current_user, library_id=library.id):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Library access denied")
+
+    permissions = sorted(
+        await RBACService.get_user_permission_codes(
+            db=db,
+            user_id=current_user.id,
+            tenant_id=current_user.tenant_id,
+            library_id=library.id,
+            fallback_role=current_user.role,
+        )
+    )
+
     token_payload = TokenPayload(
         sub=current_user.id,
         tenant_id=current_user.tenant_id or library.tenant_id,
@@ -66,6 +80,7 @@ async def switch_library(
         library_id=library.id,
         role=current_user.role,
         organization_id=library.organization_id,
+        permissions=permissions,
     )
     access_token = AuthService.create_access_token(token_payload)
     return AccessTokenResponse(access_token=access_token)

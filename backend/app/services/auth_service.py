@@ -14,6 +14,7 @@ from app.models.library import Library
 from app.models.user import User
 from app.schemas.auth import LoginRequest, LoginUser, TokenPayload, TokenResponse
 from app.services.audit_service import AuditService
+from app.services.rbac_service import RBACService
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24  # 24 horas
 
 
@@ -40,6 +41,7 @@ class AuthService:
             "tenant": tenant_claim,
             "library_id": payload.library_id,
             "organization_id": payload.organization_id,
+            "permissions": payload.permissions,
         }
 
         expire = datetime.now(timezone.utc) + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
@@ -67,6 +69,7 @@ class AuthService:
                 tenant=str(decoded.get("tenant")) if decoded.get("tenant") is not None else None,
                 library_id=int(decoded["library_id"]) if decoded.get("library_id") is not None else None,
                 organization_id=int(decoded["organization_id"]) if decoded.get("organization_id") is not None else None,
+                permissions=list(decoded.get("permissions") or []),
             )
         except (jwt.InvalidTokenError, KeyError, ValueError) as exc:
             raise HTTPException(
@@ -124,6 +127,16 @@ class AuthService:
                 )
                 raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Credenciais inválidas")
 
+            permission_codes = sorted(
+                await RBACService.get_user_permission_codes(
+                    db=db,
+                    user_id=user.id,
+                    tenant_id=user.tenant_id,
+                    library_id=tenant.id,
+                    fallback_role=user.role,
+                )
+            )
+
             token_payload = TokenPayload(
                 sub=user.id,
                 role=user.role,
@@ -131,6 +144,7 @@ class AuthService:
                 tenant=str(user.tenant_id or tenant.tenant_id or tenant.organization_id),
                 library_id=tenant.id,
                 organization_id=tenant.organization_id,
+                permissions=permission_codes,
             )
             access_token = AuthService.create_access_token(token_payload)
 
@@ -149,7 +163,7 @@ class AuthService:
 
             return TokenResponse(
                 access_token=access_token,
-                user=LoginUser(id=user.id, email=user.email, role=user.role),
+                user=LoginUser(id=user.id, email=user.email, role=user.role, permissions=permission_codes),
             )
         except HTTPException:
             raise

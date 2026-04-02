@@ -15,6 +15,7 @@ interface AuthUser {
   id: number;
   email: string;
   role: UserRole;
+  permissions: string[];
 }
 
 interface LoginResponse {
@@ -26,6 +27,8 @@ interface AuthContextValue {
   user: AuthUser | null;
   token: string | null;
   role: UserRole | null;
+  permissions: string[];
+  hasPermission: (permissionCode: string) => boolean;
   isAuthenticated: boolean;
   isLoading: boolean;
   libraryId: string | null;
@@ -81,7 +84,12 @@ function parseStoredUser(): AuthUser | null {
       && typeof parsed?.role === 'string'
       && ['super_admin', 'librarian', 'assistant', 'member'].includes(parsed.role)
     ) {
-      return { id: parsed.id, email: parsed.email, role: parsed.role as UserRole };
+      return {
+        id: parsed.id,
+        email: parsed.email,
+        role: parsed.role as UserRole,
+        permissions: Array.isArray(parsed.permissions) ? parsed.permissions.filter((item): item is string => typeof item === 'string') : []
+      };
     }
   } catch {
     return null;
@@ -150,11 +158,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const updatedToken = await switchLibrary(normalizedLibraryId);
     setToken(updatedToken);
+    const claims = parseTokenClaims(updatedToken);
+    const switchedPermissions = Array.isArray(claims?.permissions)
+      ? claims.permissions.filter((item): item is string => typeof item === 'string')
+      : [];
+    const switchedRole = typeof claims?.role === 'string' && ['super_admin', 'librarian', 'assistant', 'member'].includes(claims.role)
+      ? (claims.role as UserRole)
+      : user?.role ?? 'member';
+
+    if (user) {
+      const updatedUser = { ...user, role: switchedRole, permissions: switchedPermissions };
+      setUser(updatedUser);
+      if (typeof window !== 'undefined') {
+        window.localStorage.setItem('user', JSON.stringify(updatedUser));
+      }
+    }
+
     library.setLibraryId(normalizedLibraryId);
     if (options?.reload && typeof window !== 'undefined') {
       window.location.reload();
     }
-  }, [library]);
+  }, [library, user]);
 
   const login = useCallback(async (email: string, password: string, _tenantId?: string, requestedLibraryId?: string) => {
     const resolvedLibraryId = requestedLibraryId?.trim() || library.libraryId || '';
@@ -193,16 +217,41 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     setToken(normalizedToken);
+    const tokenPermissions = Array.isArray(payload?.permissions) ? payload.permissions.filter((item): item is string => typeof item === 'string') : [];
+    const resolvedPermissions = Array.isArray(data.user.permissions) ? data.user.permissions : tokenPermissions;
+
     setUser({
       id: data.user.id,
       email: data.user.email,
-      role: data.user.role ?? resolveRole(normalizedToken) ?? 'member'
+      role: data.user.role ?? resolveRole(normalizedToken) ?? 'member',
+      permissions: resolvedPermissions
     });
   }, [library]);
 
+  const hasPermission = useCallback((permissionCode: string) => {
+    const normalizedCode = permissionCode.trim();
+    if (!normalizedCode) {
+      return false;
+    }
+
+    return Boolean(user?.permissions?.includes(normalizedCode));
+  }, [user]);
+
   const value = useMemo(
-    () => ({ user, token, role: user?.role ?? null, libraryId: library.libraryId, setLibraryId, isAuthenticated: Boolean(token && user), isLoading, login, logout }),
-    [user, token, library.libraryId, setLibraryId, isLoading, login, logout]
+    () => ({
+      user,
+      token,
+      role: user?.role ?? null,
+      permissions: user?.permissions ?? [],
+      hasPermission,
+      libraryId: library.libraryId,
+      setLibraryId,
+      isAuthenticated: Boolean(token && user),
+      isLoading,
+      login,
+      logout
+    }),
+    [user, token, hasPermission, library.libraryId, setLibraryId, isLoading, login, logout]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

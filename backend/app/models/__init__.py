@@ -8,6 +8,7 @@ from app.models.fine import Fine, FineStatus
 from app.models.library import Library
 from app.models.library_policy import LibraryPolicy
 from app.models.loan import Loan, LoanStatus
+from app.models.rbac import Permission, Role, RolePermission, UserLibrary, UserRoleAssignment
 from app.models.organization import Organization
 from app.models.reservation import Reservation, ReservationStatus
 from app.models.section import Section
@@ -34,6 +35,11 @@ __all__ = [
     "Loan",
     "LoanStatus",
     "Organization",
+    "Permission",
+    "Role",
+    "RolePermission",
+    "UserLibrary",
+    "UserRoleAssignment",
     "Reservation",
     "ReservationStatus",
     "Subject",
