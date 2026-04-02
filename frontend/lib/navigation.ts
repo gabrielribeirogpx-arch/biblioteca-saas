@@ -39,7 +39,7 @@ export const APP_NAVIGATION: NavItem[] = [
     roles: ['super_admin', 'librarian']
   },
   {
-    href: '/admin/libraries',
+    href: '/settings/libraries',
     label: 'Libraries',
     description: 'Manage tenant libraries and multi-unit setup',
     roles: ['super_admin']

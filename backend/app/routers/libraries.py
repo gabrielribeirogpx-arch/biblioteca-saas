@@ -7,12 +7,13 @@ from app.api.deps import AuthContext, get_current_user, get_db, require_admin
 from app.models.library import Library
 from app.models.library_policy import LibraryPolicy
 from app.schemas.libraries import (
-    LibraryCreate,
+    CreateLibraryRequest,
     LibraryListItem,
     LibraryPolicyRead,
     LibraryPolicyUpdate,
     LibraryUpdate,
 )
+from app.services.library_service import LibraryService
 
 router = APIRouter()
 
@@ -42,17 +43,11 @@ async def _get_tenant_library_or_404(db: AsyncSession, library_id: int, tenant_i
 
 @router.post("", response_model=LibraryListItem)
 async def create_library(
-    payload: LibraryCreate,
+    payload: CreateLibraryRequest,
     db: AsyncSession = Depends(get_db),
     current_user=Depends(get_current_user),
     _auth: AuthContext = Depends(require_admin),
 ) -> LibraryListItem:
-    normalized_code = payload.code.strip()
-    normalized_name = payload.name.strip()
-
-    if not normalized_code or not normalized_name:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Name and code are required")
-
     source_library = (
         await db.execute(
             select(Library).where(
@@ -66,22 +61,15 @@ async def create_library(
 
     _assert_library_tenant_scope(source_library, current_user.tenant_id)
 
-    library = Library(
+    library = await LibraryService.create_library(
+        db,
         tenant_id=current_user.tenant_id,
         organization_id=source_library.organization_id,
-        name=normalized_name,
-        code=normalized_code,
+        name=payload.name,
+        code=payload.code,
+        timezone=payload.timezone,
         is_active=payload.is_active,
     )
-    db.add(library)
-
-    try:
-        await db.commit()
-    except IntegrityError as exc:
-        await db.rollback()
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Library code already exists in tenant") from exc
-
-    await db.refresh(library)
     _assert_library_tenant_scope(library, current_user.tenant_id)
 
     return LibraryListItem.model_validate(library)
@@ -92,14 +80,7 @@ async def list_libraries(
     db: AsyncSession = Depends(get_db),
     current_user=Depends(get_current_user),
 ) -> list[LibraryListItem]:
-    result = await db.execute(
-        select(Library)
-        .where(
-            Library.tenant_id == current_user.tenant_id,
-        )
-        .order_by(Library.name.asc())
-    )
-    libraries = result.scalars().all()
+    libraries = await LibraryService.list_libraries(db, tenant_id=current_user.tenant_id)
 
     for library in libraries:
         _assert_library_tenant_scope(library, current_user.tenant_id)
@@ -107,7 +88,8 @@ async def list_libraries(
     return [LibraryListItem.model_validate(library) for library in libraries]
 
 
-@router.put("/{id}", response_model=LibraryListItem)
+@router.patch("/{id}", response_model=LibraryListItem)
+@router.put("/{id}", response_model=LibraryListItem, include_in_schema=False)
 async def update_library(
     id: int,
     payload: LibraryUpdate,
@@ -120,7 +102,9 @@ async def update_library(
     if payload.name is not None:
         library.name = payload.name.strip()
     if payload.code is not None:
-        library.code = payload.code.strip()
+        library.code = LibraryService.normalize_code(payload.code)
+    if payload.timezone is not None:
+        library.timezone = payload.timezone.strip() or library.timezone
     if payload.is_active is not None:
         library.is_active = payload.is_active
 
