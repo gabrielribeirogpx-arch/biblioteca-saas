@@ -101,7 +101,7 @@ export function UserMenu() {
 
         setLibraries(filteredLibraries);
 
-        if (!libraryId && filteredLibraries.length > 0) {
+        if (!libraryId && filteredLibraries.length === 1) {
           const firstLibraryId = String(filteredLibraries[0].id);
           setLibraryId(firstLibraryId);
           setNextLibraryId(firstLibraryId);
@@ -160,6 +160,7 @@ export function UserMenu() {
           {tenant ? <p className="mt-1 text-xs text-slate-500">Tenant: {tenant}</p> : null}
           <div className="mt-2">
             <label className="text-xs text-slate-500">Biblioteca</label>
+            {!libraryId ? <p className="mt-1 text-xs text-amber-700">Selecione uma biblioteca</p> : null}
             <select
               value={nextLibraryId}
               onChange={(event) => {

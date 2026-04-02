@@ -307,7 +307,7 @@ async def get_current_user(
     if not token_user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
 
-    effective_library_id = tenant.id
+    effective_library_id = int(token_library_id)
     if header_library_id:
         if not header_library_id.isdigit():
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Library header mismatch")

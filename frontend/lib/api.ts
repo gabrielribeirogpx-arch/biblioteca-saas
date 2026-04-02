@@ -270,9 +270,14 @@ export async function apiFetch<T = unknown>(url: string, options: RequestInit = 
   const tenant = getTenant();
   const libraryId = getStoredLibraryId();
   const isProtectedEndpoint = url.startsWith('/api/v1/') && !url.startsWith('/api/v1/auth/login');
+  const isLibraryListingEndpoint = url === '/api/v1/libraries' || url.startsWith('/api/v1/libraries?');
 
   if (isProtectedEndpoint && !token) {
     return null;
+  }
+
+  if (isProtectedEndpoint && !isLibraryListingEndpoint && !libraryId) {
+    throw new ApiError('Selecione uma biblioteca', 400, 'library_id is required');
   }
 
   const headers = new Headers(options.headers);
@@ -296,6 +301,7 @@ export async function apiFetch<T = unknown>(url: string, options: RequestInit = 
     }
     if (libraryId && !headers.has('X-Library-ID')) {
       headers.set('X-Library-ID', libraryId);
+      headers.set('x-library-id', libraryId);
     }
   }
 
