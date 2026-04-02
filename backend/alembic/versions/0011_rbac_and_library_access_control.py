@@ -125,7 +125,7 @@ def upgrade() -> None:
     op.execute(
         """
         INSERT INTO roles (tenant_id, library_id, code, name, description, is_system)
-        SELECT DISTINCT u.tenant_id, NULL, 'super_admin', 'Super Admin', 'Full tenant administration', true
+        SELECT DISTINCT u.tenant_id, NULL::INTEGER, 'super_admin', 'Super Admin', 'Full tenant administration', true
         FROM users u
         WHERE u.tenant_id IS NOT NULL
         ON CONFLICT (tenant_id, code) DO NOTHING
@@ -134,7 +134,7 @@ def upgrade() -> None:
     op.execute(
         """
         INSERT INTO roles (tenant_id, library_id, code, name, description, is_system)
-        SELECT DISTINCT u.tenant_id, NULL, 'librarian', 'Librarian', 'Manage catalog and circulation', true
+        SELECT DISTINCT u.tenant_id, NULL::INTEGER, 'librarian', 'Librarian', 'Manage catalog and circulation', true
         FROM users u
         WHERE u.tenant_id IS NOT NULL
         ON CONFLICT (tenant_id, code) DO NOTHING
@@ -143,7 +143,7 @@ def upgrade() -> None:
     op.execute(
         """
         INSERT INTO roles (tenant_id, library_id, code, name, description, is_system)
-        SELECT DISTINCT u.tenant_id, NULL, 'assistant', 'Assistant', 'Assist operations and circulation', true
+        SELECT DISTINCT u.tenant_id, NULL::INTEGER, 'assistant', 'Assistant', 'Assist operations and circulation', true
         FROM users u
         WHERE u.tenant_id IS NOT NULL
         ON CONFLICT (tenant_id, code) DO NOTHING
@@ -152,7 +152,7 @@ def upgrade() -> None:
     op.execute(
         """
         INSERT INTO roles (tenant_id, library_id, code, name, description, is_system)
-        SELECT DISTINCT u.tenant_id, NULL, 'member', 'Member', 'Member-level access', true
+        SELECT DISTINCT u.tenant_id, NULL::INTEGER, 'member', 'Member', 'Member-level access', true
         FROM users u
         WHERE u.tenant_id IS NOT NULL
         ON CONFLICT (tenant_id, code) DO NOTHING
@@ -209,9 +209,9 @@ def upgrade() -> None:
     op.execute(
         """
         INSERT INTO user_roles (user_id, role_id, tenant_id, library_id)
-        SELECT u.id, r.id, u.tenant_id, NULL
+        SELECT u.id, r.id, u.tenant_id, NULL::INTEGER
         FROM users u
-        JOIN roles r ON r.tenant_id = u.tenant_id AND r.code = u.role::text
+        JOIN roles r ON r.tenant_id = u.tenant_id AND r.code = lower(u.role::text)
         WHERE u.tenant_id IS NOT NULL
         ON CONFLICT (user_id, role_id, library_id) DO NOTHING
         """
