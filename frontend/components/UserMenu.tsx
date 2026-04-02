@@ -103,7 +103,7 @@ export function UserMenu() {
 
         if (!libraryId && filteredLibraries.length > 0) {
           const firstLibraryId = String(filteredLibraries[0].id);
-          setLibraryId(firstLibraryId);
+          void setLibraryId(firstLibraryId);
           setNextLibraryId(firstLibraryId);
         }
       } catch {
@@ -163,11 +163,15 @@ export function UserMenu() {
             {!libraryId ? <p className="mt-1 text-xs text-amber-700">Selecione uma biblioteca</p> : null}
             <select
               value={nextLibraryId}
-              onChange={(event) => {
+              onChange={async (event) => {
                 const selectedLibraryId = event.target.value;
                 setNextLibraryId(selectedLibraryId);
                 if (selectedLibraryId) {
-                  setLibraryId(selectedLibraryId, { reload: true });
+                  try {
+                    await setLibraryId(selectedLibraryId);
+                  } catch {
+                    setNextLibraryId(libraryId ?? '');
+                  }
                 }
               }}
               className="mt-1 w-full rounded border border-slate-300 px-2 py-1 text-xs"

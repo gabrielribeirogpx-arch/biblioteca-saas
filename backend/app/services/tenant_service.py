@@ -234,6 +234,7 @@ class TenantService:
                     role=admin_user.role,
                     tenant_id=tenant.tenant_id or tenant.organization_id,
                     tenant=tenant.code,
+                    library_id=tenant.id,
                     organization_id=tenant.organization_id,
                 )
             )

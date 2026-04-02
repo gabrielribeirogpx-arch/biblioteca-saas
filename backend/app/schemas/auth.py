@@ -15,6 +15,7 @@ class TokenPayload(BaseModel):
     role: UserRole
     tenant_id: int
     tenant: str
+    library_id: int | None = None
     organization_id: int | None = None
 
 
@@ -28,6 +29,15 @@ class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
     user: LoginUser
+
+
+class SwitchLibraryRequest(BaseModel):
+    library_id: int
+
+
+class AccessTokenResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
 
 
 class RegisterRequest(BaseModel):

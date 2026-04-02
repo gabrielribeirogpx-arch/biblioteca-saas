@@ -2,7 +2,17 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 
-import { apiFetch, getStoredLibraryId, getStoredTenantId, getStoredToken, setStoredLibraryId, setStoredTenantId, type UserRole } from '../lib/api';
+import {
+  apiFetch,
+  getStoredLibraryId,
+  getStoredTenantId,
+  getStoredToken,
+  setStoredLibraryId,
+  setStoredTenantId,
+  setStoredToken,
+  switchLibrary,
+  type UserRole
+} from '../lib/api';
 
 interface AuthUser {
   id: number;
@@ -25,7 +35,7 @@ interface AuthContextValue {
   isAuthenticated: boolean;
   isLoading: boolean;
   libraryId: string | null;
-  setLibraryId: (libraryId: string, options?: { reload?: boolean }) => void;
+  setLibraryId: (libraryId: string, options?: { reload?: boolean }) => Promise<void>;
   login: (email: string, password: string, tenantId?: string, libraryId?: string) => Promise<void>;
   logout: () => void;
 }
@@ -138,9 +148,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => window.removeEventListener('auth:unauthorized', handleLogout);
   }, [logout]);
 
-  const setLibraryId = useCallback((nextLibraryId: string, options?: { reload?: boolean }) => {
-    setStoredLibraryId(nextLibraryId);
-    setLibraryIdState(nextLibraryId);
+  const setLibraryId = useCallback(async (nextLibraryId: string, options?: { reload?: boolean }) => {
+    const normalizedLibraryId = nextLibraryId.trim();
+    if (!normalizedLibraryId) {
+      return;
+    }
+
+    const updatedToken = await switchLibrary(normalizedLibraryId);
+    setToken(updatedToken);
+    setStoredLibraryId(normalizedLibraryId);
+    setLibraryIdState(normalizedLibraryId);
     if (options?.reload && typeof window !== 'undefined') {
       window.location.reload();
     }
@@ -185,8 +202,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     if (typeof window !== 'undefined') {
-      window.localStorage.setItem('access_token', normalizedToken);
-      window.localStorage.setItem('token', normalizedToken);
+      setStoredToken(normalizedToken);
       console.log('TOKEN SAVED', window.localStorage.getItem('token'));
       window.localStorage.setItem('user', JSON.stringify(data.user));
       window.localStorage.setItem('user_email', data.user.email);
