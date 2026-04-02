@@ -3,7 +3,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import AuthContext, TenantContext, get_auth_context, get_current_library, get_current_user, get_db, require_admin
+from app.api.deps import TenantContext, get_current_library, get_current_user, get_db, require_admin
 from app.models.library import Library
 from app.models.library_policy import LibraryPolicy
 from app.models.user import User
@@ -48,7 +48,7 @@ async def create_library(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
     current_library: TenantContext = Depends(get_current_library),
-    _auth: AuthContext = Depends(require_admin),
+    _auth: User = Depends(require_admin),
 ) -> LibraryListItem:
     if current_user is None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Unauthorized")
@@ -86,7 +86,7 @@ async def create_library(
 @router.get("", response_model=list[LibraryListItem])
 async def list_libraries(
     db: AsyncSession = Depends(get_db),
-    auth: AuthContext = Depends(get_auth_context),
+    auth: User = Depends(get_current_user),
 ) -> list[LibraryListItem]:
     result = await db.execute(
         select(Library)
@@ -108,7 +108,7 @@ async def update_library(
     payload: LibraryUpdate,
     db: AsyncSession = Depends(get_db),
     current_user=Depends(get_current_user),
-    _auth: AuthContext = Depends(require_admin),
+    _auth: User = Depends(require_admin),
 ) -> LibraryListItem:
     library = await _get_tenant_library_or_404(db, id, current_user.tenant_id)
 
@@ -136,7 +136,7 @@ async def delete_library(
     id: int,
     db: AsyncSession = Depends(get_db),
     current_user=Depends(get_current_user),
-    _auth: AuthContext = Depends(require_admin),
+    _auth: User = Depends(require_admin),
 ) -> None:
     library = await _get_tenant_library_or_404(db, id, current_user.tenant_id)
     await db.delete(library)
@@ -171,7 +171,7 @@ async def upsert_library_policy(
     payload: LibraryPolicyUpdate,
     db: AsyncSession = Depends(get_db),
     current_user=Depends(get_current_user),
-    _auth: AuthContext = Depends(require_admin),
+    _auth: User = Depends(require_admin),
 ) -> LibraryPolicyRead:
     library = await _get_tenant_library_or_404(db, id, current_user.tenant_id)
 

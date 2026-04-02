@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends
-from app.api.deps import AuthContext, TenantContext, require_user, resolve_tenant
+from app.api.deps import TenantContext, require_user, resolve_tenant
+from app.models.user import User
 from app.schemas.search import SearchQuery, SearchResult
 from app.services.search import SearchService
 
@@ -10,7 +11,7 @@ router = APIRouter()
 async def search_books(
     payload: SearchQuery,
     tenant: TenantContext = Depends(resolve_tenant),
-    auth: AuthContext = Depends(require_user),
+    auth: User = Depends(require_user),
 ) -> list[SearchResult]:
     return SearchService.search_books(
         tenant_id=tenant.tenant_id,
