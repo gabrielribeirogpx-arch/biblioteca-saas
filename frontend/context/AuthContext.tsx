@@ -10,6 +10,14 @@ interface AuthUser {
   role: UserRole;
 }
 
+interface LoginResponse {
+  access_token?: string;
+  user?: AuthUser;
+  tenant?: {
+    slug?: string;
+  };
+}
+
 interface AuthContextValue {
   user: AuthUser | null;
   token: string | null;
@@ -144,9 +152,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
     const sanitizedEmail = email.trim();
     const sanitizedPassword = password;
-    let data: { access_token?: string; user?: AuthUser } | null = null;
+    let data: LoginResponse | null = null;
     try {
-      data = await apiFetch<{ access_token?: string; user?: AuthUser }>('/api/v1/auth/login', {
+      data = await apiFetch<LoginResponse>('/api/v1/auth/login', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -167,6 +175,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const normalizedToken = data.access_token.trim().replace(/^Bearer\s+/i, '');
     const payload = parseTokenClaims(normalizedToken);
     const tokenTenantId = payload?.tenant_id != null ? String(payload.tenant_id) : null;
+    const responseTenantSlug = data.tenant?.slug?.trim();
     if (payload?.library_id) {
       setStoredLibraryId(String(payload.library_id));
       setLibraryIdState(String(payload.library_id));
@@ -178,7 +187,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       console.log('TOKEN SAVED', window.localStorage.getItem('token'));
       window.localStorage.setItem('user', JSON.stringify(data.user));
       window.localStorage.setItem('user_email', data.user.email);
-      setStoredTenantId(tokenTenantId ?? resolvedTenantId);
+      setStoredTenantId(responseTenantSlug || tokenTenantId || resolvedTenantId);
     }
 
     setToken(normalizedToken);
