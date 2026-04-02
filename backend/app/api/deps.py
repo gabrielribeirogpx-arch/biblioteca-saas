@@ -20,6 +20,7 @@ from app.models.organization import Organization
 from app.models.user import User
 from app.models.user import UserRole
 from app.services.audit_service import AuditService
+from app.utils.slug import normalize_slug
 
 
 DEFAULT_TENANT_CODE = "default"
@@ -122,6 +123,9 @@ async def resolve_tenant(
         or _extract_subdomain(request.headers.get("host"))
         or DEFAULT_TENANT_CODE
     ).strip()
+    tenant_key = normalize_slug(tenant_key)
+    if not tenant_key:
+        tenant_key = DEFAULT_TENANT_CODE
     logger.info("tenant.resolve requested tenant_key=%s", tenant_key)
 
     library = await _resolve_library_from_tenant_key(db, tenant_key)
@@ -169,7 +173,7 @@ async def get_tenant_from_request(request: Request, db: AsyncSession) -> Library
     if not tenant_key:
         return None
 
-    tenant_key = tenant_key.strip()
+    tenant_key = normalize_slug(tenant_key.strip())
     if not tenant_key:
         return None
 
@@ -225,7 +229,7 @@ async def get_current_user(
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid authentication token")
 
     if header_tenant_slug:
-        tenant_library = await _resolve_library_from_tenant_key(db, header_tenant_slug.strip())
+        tenant_library = await _resolve_library_from_tenant_key(db, normalize_slug(header_tenant_slug.strip()))
         if tenant_library and tenant_library.tenant_id != user.tenant_id:
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Tenant mismatch")
 

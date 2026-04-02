@@ -7,6 +7,7 @@ from app.models.library import Library
 from app.models.user import User
 from app.schemas.auth import AccessTokenResponse, LoginRequest, SwitchLibraryRequest, TokenPayload, TokenResponse
 from app.services.auth_service import AuthService
+from app.utils.slug import normalize_slug
 
 router = APIRouter()
 
@@ -27,7 +28,7 @@ async def login(
         if not tenant or not tenant.strip():
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Tenant obrigatório")
 
-        tenant = tenant.strip()
+        tenant = normalize_slug(tenant.strip())
         query = select(Library).where(Library.code == tenant)
         if library_id and library_id.strip().isdigit():
             query = select(Library).where(Library.id == int(library_id.strip()))

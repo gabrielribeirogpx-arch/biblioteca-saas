@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import logging
 import re
-import unicodedata
 
 from fastapi import HTTPException, status
 from sqlalchemy import select
@@ -16,6 +15,7 @@ from app.models.user import User, UserRole
 from app.schemas.auth import RegisterRequest, RegisterResponse, TokenPayload
 from app.schemas.tenants import TenantCreate
 from app.services.auth_service import AuthService
+from app.utils.slug import normalize_slug
 
 
 DEFAULT_TENANT_CODE = "default"
@@ -28,12 +28,7 @@ logger = logging.getLogger(__name__)
 class TenantService:
     @staticmethod
     def normalize_slug(raw_slug: str) -> str:
-        normalized = unicodedata.normalize("NFKD", raw_slug).encode("ascii", "ignore").decode("ascii")
-        normalized = normalized.lower().strip()
-        normalized = re.sub(r"[^a-z0-9\s-]", "", normalized)
-        normalized = re.sub(r"[\s_-]+", "-", normalized)
-        normalized = re.sub(r"-+", "-", normalized).strip("-")
-        return normalized
+        return normalize_slug(raw_slug.strip())
 
     @staticmethod
     def normalize_email(raw_email: str) -> str:
