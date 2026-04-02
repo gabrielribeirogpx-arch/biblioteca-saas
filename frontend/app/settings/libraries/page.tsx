@@ -28,9 +28,18 @@ function parseTenantIdFromToken(token: string | null): string | null {
   }
 }
 
-async function createLibraryWithName(name: string): Promise<LibraryOption | null> {
+async function createLibraryWithName(name: string, token: string | null): Promise<LibraryOption | null> {
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json'
+  };
+
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+  }
+
   return await apiFetch<LibraryOption>('/api/v1/libraries', {
     method: 'POST',
+    headers,
     body: JSON.stringify({ name })
   });
 }
@@ -101,7 +110,7 @@ export default function SettingsLibrariesPage() {
     setError('');
 
     try {
-      await createLibraryWithName(name.trim());
+      await createLibraryWithName(name.trim(), token);
       setToastMessage(SUCCESS_MESSAGE);
       setShowModal(false);
       setName('');

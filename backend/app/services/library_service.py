@@ -16,18 +16,23 @@ class LibraryService:
         return name.strip()
 
     @staticmethod
+    def generate_code_from_name(name: str) -> str:
+        generated_code = "-".join(name.strip().lower().split())
+        return generated_code[:64]
+
+    @staticmethod
     async def create_library(
         db: AsyncSession,
         *,
         tenant_id: int,
         organization_id: int,
         name: str,
-        code: str,
+        code: str | None = None,
         timezone: str = "America/Sao_Paulo",
         is_active: bool = True,
     ) -> Library:
         normalized_name = LibraryService.normalize_name(name)
-        normalized_code = LibraryService.normalize_code(code)
+        normalized_code = LibraryService.normalize_code(code) if code else LibraryService.generate_code_from_name(normalized_name)
         normalized_timezone = timezone.strip() if timezone and timezone.strip() else "America/Sao_Paulo"
 
         if not normalized_name:

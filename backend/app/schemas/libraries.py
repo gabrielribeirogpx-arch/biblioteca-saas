@@ -21,7 +21,7 @@ class LibraryListItem(LibraryResponse):
 
 class CreateLibraryRequest(BaseModel):
     name: str = Field(min_length=1)
-    code: str = Field(min_length=1)
+    code: str | None = None
     timezone: str = "America/Sao_Paulo"
     is_active: bool = True
 
