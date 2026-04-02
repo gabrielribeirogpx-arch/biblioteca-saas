@@ -3,7 +3,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import AuthContext, get_current_user, get_db, require_admin
+from app.api.deps import AuthContext, get_auth_context, get_current_user, get_db, require_admin
 from app.models.library import Library
 from app.models.library_policy import LibraryPolicy
 from app.models.user import User
@@ -85,20 +85,17 @@ async def create_library(
 @router.get("", response_model=list[LibraryListItem])
 async def list_libraries(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    auth: AuthContext = Depends(get_auth_context),
 ) -> list[LibraryListItem]:
-    print("USER ROLE:", current_user.role)
-    print("TENANT:", current_user.tenant_id)
-
     result = await db.execute(
         select(Library)
-        .where(Library.tenant_id == current_user.tenant_id)
+        .where(Library.tenant_id == auth.tenant_id)
         .order_by(Library.name.asc())
     )
     libraries = list(result.scalars().all())
 
     for library in libraries:
-        _assert_library_tenant_scope(library, current_user.tenant_id)
+        _assert_library_tenant_scope(library, auth.tenant_id)
 
     return [LibraryListItem.model_validate(library) for library in libraries]
 

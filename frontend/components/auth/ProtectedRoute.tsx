@@ -6,7 +6,7 @@ import { useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 
 export function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  const { isAuthenticated, isLoading } = useAuth();
+  const { isAuthenticated, isLoading, libraryId } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
 
@@ -30,6 +30,14 @@ export function ProtectedRoute({ children }: { children: React.ReactNode }) {
 
   if (!canAccessRoute && pathname !== '/login') {
     return null;
+  }
+
+  if (!libraryId) {
+    return (
+      <div className="rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">
+        Selecione uma biblioteca para continuar usando o sistema.
+      </div>
+    );
   }
 
   return <>{children}</>;

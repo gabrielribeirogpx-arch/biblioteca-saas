@@ -25,7 +25,7 @@ interface AuthContextValue {
   isAuthenticated: boolean;
   isLoading: boolean;
   libraryId: string | null;
-  setLibraryId: (libraryId: string) => void;
+  setLibraryId: (libraryId: string, options?: { reload?: boolean }) => void;
   login: (email: string, password: string, tenantId?: string, libraryId?: string) => Promise<void>;
   logout: () => void;
 }
@@ -138,9 +138,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => window.removeEventListener('auth:unauthorized', handleLogout);
   }, [logout]);
 
-  const setLibraryId = useCallback((nextLibraryId: string) => {
+  const setLibraryId = useCallback((nextLibraryId: string, options?: { reload?: boolean }) => {
     setStoredLibraryId(nextLibraryId);
     setLibraryIdState(nextLibraryId);
+    if (options?.reload && typeof window !== 'undefined') {
+      window.location.reload();
+    }
   }, []);
 
   const login = useCallback(async (email: string, password: string, tenantId?: string, requestedLibraryId?: string) => {
