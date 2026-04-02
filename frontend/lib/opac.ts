@@ -1,3 +1,5 @@
+import { apiPublicGet } from './apiPublic';
+
 export interface OPACLibraryInfo {
   id: number;
   name: string;
@@ -51,28 +53,8 @@ export interface OPACBookDetail {
   libraries: OPACHoldingLibrary[];
 }
 
-const DEFAULT_API_URL = 'https://backend-biblioteca-saas-production.up.railway.app';
-
-function apiBaseUrl(): string {
-  return (process.env.NEXT_PUBLIC_API_URL ?? DEFAULT_API_URL).replace(/\/$/, '');
-}
-
 async function opacFetch<T>(path: string): Promise<T | null> {
-  try {
-    const response = await fetch(`${apiBaseUrl()}${path}`, {
-      method: 'GET',
-      headers: { Accept: 'application/json' },
-      next: { revalidate: 60 }
-    });
-
-    if (!response.ok) {
-      return null;
-    }
-
-    return (await response.json()) as T;
-  } catch {
-    return null;
-  }
+  return apiPublicGet<T>(path, { revalidate: 60 });
 }
 
 export async function getPublicBooks(query: string): Promise<OPACBookListResponse> {
