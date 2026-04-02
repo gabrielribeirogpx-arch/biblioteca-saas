@@ -4,7 +4,7 @@ from collections.abc import AsyncGenerator, Callable
 from dataclasses import dataclass
 import logging
 
-from fastapi import Depends, Header, HTTPException, Request, status
+from fastapi import Depends, Header, HTTPException, Query, Request, status
 import jwt
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -53,6 +53,7 @@ async def resolve_tenant(
     request: Request,
     db: AsyncSession = Depends(get_db),
     x_library_id: str | None = Header(default=None, alias="X-Library-ID"),
+    tenant: str | None = Query(default=None),
 ) -> TenantContext:
     forwarded_host = request.headers.get("x-forwarded-host", "")
     host_header = forwarded_host.split(",")[0].strip() if forwarded_host else request.headers.get("host", "")
@@ -61,8 +62,12 @@ async def resolve_tenant(
         host_value = host_value.split(":", 1)[0]
 
     tenant_slug: str | None = None
+    tenant_query = (tenant or "").strip().lower()
+    if tenant_query:
+        tenant_slug = tenant_query
+
     host_parts = [part for part in host_value.split(".") if part]
-    if len(host_parts) >= 3:
+    if not tenant_slug and len(host_parts) >= 3:
         tenant_slug = host_parts[0]
 
     is_dev_host = host_value in {"localhost", "127.0.0.1", "0.0.0.0"} or host_value.endswith(".localhost")
@@ -83,7 +88,12 @@ async def resolve_tenant(
             )
         ).scalars().first()
         if not library:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tenant not found for host")
+            detail = "Tenant not found"
+            if tenant_query:
+                detail = "Tenant not found for query parameter"
+            elif host_value:
+                detail = "Tenant not found for host"
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=detail)
 
         tenant_context = TenantContext(
             tenant_id=library.tenant_id,
@@ -100,6 +110,9 @@ async def resolve_tenant(
             tenant_context.library_id,
         )
         return tenant_context
+
+    if request.url.path.startswith("/api/public/"):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="tenant query parameter is required")
 
     if x_library_id and x_library_id.strip().isdigit():
         library = (

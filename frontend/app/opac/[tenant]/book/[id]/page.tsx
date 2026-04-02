@@ -1,34 +1,15 @@
 import Link from 'next/link';
 import type { Metadata } from 'next';
 
-import { getPublicBook } from '../../../../lib/opac';
+import { getPublicBook } from '../../../../../lib/opac';
 
-type SearchParams = Record<string, string | string[] | undefined>;
-
-function asValue(value: string | string[] | undefined): string {
-  if (Array.isArray(value)) {
-    return value[0] ?? '';
-  }
-  return value ?? '';
-}
-
-export async function generateMetadata({
-  params,
-  searchParams
-}: {
-  params: { id: string };
-  searchParams: SearchParams;
-}): Promise<Metadata> {
+export async function generateMetadata({ params }: { params: { tenant: string; id: string } }): Promise<Metadata> {
   const bookId = Number(params.id);
-  const tenant = asValue(searchParams.tenant);
   if (!Number.isInteger(bookId) || bookId <= 0) {
     return { title: 'Livro não encontrado | OPAC' };
   }
-  if (!tenant) {
-    return { title: 'Tenant obrigatório | OPAC' };
-  }
 
-  const book = await getPublicBook(bookId, tenant);
+  const book = await getPublicBook(bookId, params.tenant);
   if (!book) {
     return { title: 'Livro não encontrado | OPAC' };
   }
@@ -39,26 +20,9 @@ export async function generateMetadata({
   };
 }
 
-export default async function OPACBookPage({
-  params,
-  searchParams
-}: {
-  params: { id: string };
-  searchParams: SearchParams;
-}) {
+export default async function OPACTenantBookPage({ params }: { params: { tenant: string; id: string } }) {
   const bookId = Number(params.id);
-  const tenant = asValue(searchParams.tenant);
-  if (!tenant) {
-    return (
-      <main className="min-h-screen bg-slate-50 px-4 py-10">
-        <div className="mx-auto max-w-3xl rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
-          <h1 className="text-xl font-bold text-slate-900">Tenant obrigatório</h1>
-          <p className="mt-2 text-sm text-slate-600">Acesse o detalhe pelo caminho <code>/opac/&lt;tenant&gt;/book/&lt;id&gt;</code>.</p>
-        </div>
-      </main>
-    );
-  }
-
+  const tenant = params.tenant;
   const book = Number.isInteger(bookId) && bookId > 0 ? await getPublicBook(bookId, tenant) : null;
 
   if (!book) {

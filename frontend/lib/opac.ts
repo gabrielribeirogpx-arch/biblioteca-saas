@@ -57,9 +57,13 @@ async function opacFetch<T>(path: string): Promise<T | null> {
   return apiPublicGet<T>(path, { revalidate: 60 });
 }
 
-export async function getPublicBooks(query: string): Promise<OPACBookListResponse> {
+export async function getPublicBooks(query: string, tenant?: string): Promise<OPACBookListResponse> {
+  const resolvedQuery = new URLSearchParams(query);
+  if (tenant) {
+    resolvedQuery.set('tenant', tenant);
+  }
   return (
-    await opacFetch<OPACBookListResponse>(`/api/public/books${query ? `?${query}` : ''}`)
+    await opacFetch<OPACBookListResponse>(`/api/public/books${resolvedQuery.size > 0 ? `?${resolvedQuery.toString()}` : ''}`)
   ) ?? {
     items: [],
     page: 1,
@@ -68,6 +72,10 @@ export async function getPublicBooks(query: string): Promise<OPACBookListRespons
   };
 }
 
-export async function getPublicBook(bookId: number): Promise<OPACBookDetail | null> {
-  return await opacFetch<OPACBookDetail>(`/api/public/books/${bookId}`);
+export async function getPublicBook(bookId: number, tenant?: string): Promise<OPACBookDetail | null> {
+  const query = new URLSearchParams();
+  if (tenant) {
+    query.set('tenant', tenant);
+  }
+  return await opacFetch<OPACBookDetail>(`/api/public/books/${bookId}${query.size > 0 ? `?${query.toString()}` : ''}`);
 }
