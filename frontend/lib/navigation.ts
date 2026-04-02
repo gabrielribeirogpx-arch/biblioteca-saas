@@ -6,8 +6,9 @@ export interface NavItem {
   href: string;
   label: string;
   description: string;
-  roles: UserRole[];
+  roles?: UserRole[];
   icon?: NavIcon;
+  section?: 'principal' | 'administracao';
 }
 
 export const APP_NAVIGATION: NavItem[] = [
@@ -16,66 +17,75 @@ export const APP_NAVIGATION: NavItem[] = [
     label: 'Dashboard',
     description: 'Operational metrics and status overview',
     roles: ['super_admin', 'librarian', 'assistant', 'member'],
-    icon: 'none'
+    icon: 'none',
+    section: 'principal'
   },
   {
     href: '/catalog',
     label: 'Catalog',
     description: 'Search and curate bibliographic records',
     roles: ['super_admin', 'librarian', 'assistant'],
-    icon: 'none'
+    icon: 'none',
+    section: 'principal'
   },
   {
     href: '/catalog/advanced',
     label: 'Advanced Catalog',
     description: 'Create MARC21-ready bibliographic records',
     roles: ['super_admin', 'librarian'],
-    icon: 'none'
+    icon: 'none',
+    section: 'principal'
   },
   {
     href: '/loans',
     label: 'Loans',
     description: 'Manage circulation and due dates',
     roles: ['super_admin', 'librarian', 'assistant'],
-    icon: 'none'
+    icon: 'none',
+    section: 'principal'
   },
   {
     href: '/users',
     label: 'Users',
     description: 'Manage tenant users and access control',
     roles: ['super_admin', 'librarian'],
-    icon: 'none'
+    icon: 'none',
+    section: 'administracao'
   },
   {
     href: '/settings/libraries',
     label: 'Bibliotecas',
     description: 'Manage tenant libraries and multi-unit setup',
     roles: ['super_admin'],
-    icon: 'book'
+    icon: 'book',
+    section: 'administracao'
   },
   {
     href: '/reservations',
     label: 'Reservations',
     description: 'Track book reservations and queue status',
     roles: ['super_admin', 'librarian', 'assistant', 'member'],
-    icon: 'none'
+    icon: 'none',
+    section: 'principal'
   },
   {
     href: '/fines',
     label: 'Fines',
     description: 'Review and settle overdue fines',
     roles: ['super_admin', 'librarian', 'assistant'],
-    icon: 'none'
+    icon: 'none',
+    section: 'principal'
   },
   {
     href: '/reports',
     label: 'Reports',
     description: 'Track KPIs and compliance reporting',
     roles: ['super_admin', 'librarian'],
-    icon: 'none'
+    icon: 'none',
+    section: 'principal'
   }
 ];
 
 export function navigationForRole(role: UserRole): NavItem[] {
-  return APP_NAVIGATION.filter((item) => item.roles.includes(role));
+  return APP_NAVIGATION.filter((item) => !item.roles || item.roles.includes(role));
 }

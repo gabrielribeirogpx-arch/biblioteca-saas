@@ -1,4 +1,7 @@
+'use client';
+
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 
 import type { UserRole } from '../../lib/api';
 import { navigationForRole } from '../../lib/navigation';
@@ -19,23 +22,41 @@ function BookIcon() {
 }
 
 export function RoleAwareNav({ role }: RoleAwareNavProps) {
+  const pathname = usePathname();
   const items = navigationForRole(role);
+  const principalItems = items.filter((item) => item.section !== 'administracao');
+  const adminItems = items.filter((item) => item.section === 'administracao');
+
+  const renderItem = (item: (typeof items)[number]) => {
+    const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`);
+
+    return (
+      <Link
+        className={`block rounded-lg px-3 py-2 text-sm transition ${
+          isActive ? 'bg-brand-50 text-brand-900 ring-1 ring-brand-200' : 'text-slate-700 hover:bg-brand-50 hover:text-brand-900'
+        }`}
+        href={item.href}
+        key={item.href}
+      >
+        <p className="flex items-center gap-2 font-semibold">
+          {item.icon === 'book' ? <BookIcon /> : null}
+          <span>{item.label}</span>
+        </p>
+        <p className={`text-xs ${isActive ? 'text-brand-700' : 'text-slate-500'}`}>{item.description}</p>
+      </Link>
+    );
+  };
 
   return (
-    <nav className="space-y-1">
-      {items.map((item) => (
-        <Link
-          className="block rounded-lg px-3 py-2 text-sm text-slate-700 transition hover:bg-brand-50 hover:text-brand-900"
-          href={item.href}
-          key={item.href}
-        >
-          <p className="flex items-center gap-2 font-semibold">
-            {item.icon === 'book' ? <BookIcon /> : null}
-            <span>{item.label}</span>
-          </p>
-          <p className="text-xs text-slate-500">{item.description}</p>
-        </Link>
-      ))}
+    <nav className="space-y-4">
+      <div className="space-y-1">{principalItems.map((item) => renderItem(item))}</div>
+
+      {adminItems.length > 0 ? (
+        <div className="border-t border-slate-200 pt-4">
+          <p className="mb-2 px-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Administração</p>
+          <div className="space-y-1">{adminItems.map((item) => renderItem(item))}</div>
+        </div>
+      ) : null}
     </nav>
   );
 }
