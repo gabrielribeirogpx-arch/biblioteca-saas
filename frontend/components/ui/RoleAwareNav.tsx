@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { useMemo } from 'react';
 
 import type { UserRole } from '../../lib/api';
 import { navigationForRole } from '../../lib/navigation';
@@ -23,11 +24,16 @@ function BookIcon() {
 
 export function RoleAwareNav({ role }: RoleAwareNavProps) {
   const pathname = usePathname();
+  const tenant = typeof window !== 'undefined' ? window.localStorage.getItem('tenant') : null;
   const items = navigationForRole(role);
-  const principalItems = items.filter((item) => item.section !== 'administracao');
-  const adminItems = items.filter((item) => item.section === 'administracao');
+  const resolvedItems = useMemo(
+    () => items.map((item) => (item.href === '/dashboard' && tenant ? { ...item, href: `/t/${tenant}/dashboard` } : item)),
+    [items, tenant]
+  );
+  const principalItems = resolvedItems.filter((item) => item.section !== 'administracao');
+  const adminItems = resolvedItems.filter((item) => item.section === 'administracao');
 
-  const renderItem = (item: (typeof items)[number]) => {
+  const renderItem = (item: (typeof resolvedItems)[number]) => {
     const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`);
 
     return (

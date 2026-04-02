@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { FormEvent, useEffect, useState } from 'react';
 
 import { useAuth } from '../../context/AuthContext';
+import { getTenant } from '../../lib/api';
 
 export default function LoginPage() {
   const { login, isAuthenticated, isLoading } = useAuth();
@@ -19,11 +20,12 @@ export default function LoginPage() {
 
   useEffect(() => {
     if (!isLoading && isAuthenticated) {
-      if (tenantParam) {
-        router.replace(`/t/${tenantParam}/dashboard`);
+      const resolvedTenant = tenantParam ?? getTenant().trim();
+      if (!resolvedTenant) {
+        router.replace('/login');
         return;
       }
-      router.replace('/dashboard');
+      router.replace(`/t/${resolvedTenant}/dashboard`);
     }
   }, [isAuthenticated, isLoading, router, tenantParam]);
 
@@ -34,11 +36,12 @@ export default function LoginPage() {
 
     try {
       await login(email, password, tenantParam);
-      if (tenantParam) {
-        router.replace(`/t/${tenantParam}/dashboard`);
+      const resolvedTenant = tenantParam ?? getTenant().trim();
+      if (resolvedTenant) {
+        router.replace(`/t/${resolvedTenant}/dashboard`);
         return;
       }
-      router.replace('/dashboard');
+      router.replace('/login');
     } catch (submitError) {
       setError(submitError instanceof Error ? submitError.message : 'Falha ao autenticar');
     } finally {

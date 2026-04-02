@@ -179,6 +179,10 @@ export function getStoredTenantId(): string {
   );
 }
 
+export function getTenant(): string {
+  return getStoredTenantId();
+}
+
 export function getStoredLibraryId(): string | null {
   if (typeof window === 'undefined') {
     return null;
@@ -247,10 +251,23 @@ function buildUrl(baseUrl: string, endpoint: string): string {
   return `${normalizedBase}${normalizedEndpoint}`;
 }
 
+function appendTenantQueryParam(url: string, tenant: string): string {
+  if (!url.startsWith('/api/v1/')) {
+    return url;
+  }
+
+  if (url.includes('tenant=')) {
+    return url;
+  }
+
+  const separator = url.includes('?') ? '&' : '?';
+  return `${url}${separator}tenant=${encodeURIComponent(tenant)}`;
+}
+
 export async function apiFetch<T = unknown>(url: string, options: RequestInit = {}): Promise<T | null> {
   const token = getStoredToken();
   const tokenClaims = token ? parseJwtClaims(token) : null;
-  const tenant = getStoredTenantId();
+  const tenant = getTenant();
   const libraryId = getStoredLibraryId();
   const isProtectedEndpoint = url.startsWith('/api/v1/') && !url.startsWith('/api/v1/auth/login');
 
@@ -274,6 +291,9 @@ export async function apiFetch<T = unknown>(url: string, options: RequestInit = 
     if (!headers.has('X-Tenant-ID')) {
       headers.set('X-Tenant-ID', effectiveTenantId);
     }
+    if (!headers.has('x-tenant-slug')) {
+      headers.set('x-tenant-slug', effectiveTenantId);
+    }
     if (libraryId && !headers.has('X-Library-ID')) {
       headers.set('X-Library-ID', libraryId);
     }
@@ -283,7 +303,7 @@ export async function apiFetch<T = unknown>(url: string, options: RequestInit = 
     headers.set('Authorization', `Bearer ${token}`);
   }
 
-  const response = await fetch(buildUrl(getApiBaseUrl(), url), {
+  const response = await fetch(buildUrl(getApiBaseUrl(), appendTenantQueryParam(url, tenant)), {
     ...options,
     headers,
     cache: 'no-store'
