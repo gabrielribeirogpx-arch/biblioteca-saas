@@ -4,11 +4,13 @@ from pydantic import BaseModel, Field
 
 
 class LoanCreate(BaseModel):
+    user_id: int
     copy_id: int
     due_date: date
 
 
 class LoanRenewRequest(BaseModel):
+    loan_id: int | None = None
     renewal_days: int = Field(default=14, ge=1, le=30)
 
 

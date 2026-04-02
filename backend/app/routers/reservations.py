@@ -50,7 +50,7 @@ async def create_reservation(
         ctx.tenant.library_id,
         auth.tenant_id,
         auth.id,
-        payload.copy_id,
+        payload.book_id,
     )
     await AuditService.log_event(
         db=db,
@@ -67,10 +67,11 @@ async def create_reservation(
         ip_address=request.client.host if request.client else None,
     )
     return ReservationOut(
-        id=reservation.id,
-        user_id=reservation.user_id,
-        copy_id=reservation.copy_id,
-        position=reservation.position,
+            id=reservation.id,
+            user_id=reservation.user_id,
+            book_id=reservation.book_id,
+            copy_id=reservation.copy_id,
+            position=reservation.position,
         status=reservation.status.value,
         reserved_at=reservation.reserved_at,
         expires_at=reservation.expires_at,
@@ -98,6 +99,7 @@ async def list_reservations(
             select(
                 reservation_table.c.id,
                 reservation_table.c.user_id,
+                reservation_table.c.book_id,
                 reservation_table.c.copy_id,
                 reservation_table.c.position,
                 reservation_table.c.status.cast(String).label("status"),
@@ -110,6 +112,7 @@ async def list_reservations(
             )
             .order_by(
                 reservation_table.c.copy_id.asc(),
+                reservation_table.c.book_id.asc(),
                 reservation_table.c.position.asc(),
                 reservation_table.c.id.asc(),
             )
@@ -122,13 +125,14 @@ async def list_reservations(
 
         await db.rollback()
         computed_position = func.row_number().over(
-            partition_by=reservation_table.c.copy_id,
+            partition_by=reservation_table.c.book_id,
             order_by=(reservation_table.c.reserved_at.asc(), reservation_table.c.id.asc()),
         )
         result = await db.execute(
             select(
                 reservation_table.c.id,
                 reservation_table.c.user_id,
+                reservation_table.c.book_id,
                 reservation_table.c.copy_id,
                 computed_position.label("position"),
                 reservation_table.c.status.cast(String).label("status"),
@@ -140,7 +144,7 @@ async def list_reservations(
                 reservation_table.c.tenant_id == auth.tenant_id,
             )
             .order_by(
-                reservation_table.c.copy_id.asc(),
+                reservation_table.c.book_id.asc(),
                 reservation_table.c.reserved_at.asc(),
                 reservation_table.c.id.asc(),
             )
@@ -151,6 +155,7 @@ async def list_reservations(
         ReservationOut(
             id=record.id,
             user_id=record.user_id,
+            book_id=record.book_id,
             copy_id=record.copy_id,
             position=record.position,
             status=_normalize_reservation_status(record.status),

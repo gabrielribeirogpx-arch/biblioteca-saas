@@ -34,6 +34,12 @@ class Reservation(Base):
             name="fk_reservations_copy_tenant",
         ),
         ForeignKeyConstraint(
+            ["library_id", "book_id"],
+            ["books.library_id", "books.id"],
+            ondelete="RESTRICT",
+            name="fk_reservations_book_tenant",
+        ),
+        ForeignKeyConstraint(
             ["library_id", "user_id"],
             ["users.library_id", "users.id"],
             ondelete="RESTRICT",
@@ -41,6 +47,7 @@ class Reservation(Base):
         ),
         UniqueConstraint("library_id", "id", name="uq_reservations_library_id_id"),
         Index("ix_reservations_library_status", "library_id", "status"),
+        Index("ix_reservations_library_book_status_position", "library_id", "book_id", "status", "position"),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -51,7 +58,8 @@ class Reservation(Base):
         ForeignKey("libraries.id", ondelete="CASCADE"), nullable=False, index=True
     )
     user_id: Mapped[int] = mapped_column(nullable=False)
-    copy_id: Mapped[int] = mapped_column(nullable=False)
+    book_id: Mapped[int] = mapped_column(nullable=False, index=True)
+    copy_id: Mapped[int | None] = mapped_column(nullable=True)
 
     status: Mapped[ReservationStatus] = mapped_column(
         Enum(ReservationStatus, name="reservation_status", native_enum=True),
@@ -74,3 +82,4 @@ class Reservation(Base):
     library = relationship("Library", back_populates="reservations", overlaps="user,copy,reservations")
     user = relationship("User", back_populates="reservations", overlaps="library,copy,reservations")
     copy = relationship("Copy", back_populates="reservations", overlaps="library,user,reservations")
+    book = relationship("Book", overlaps="library,reservations")
