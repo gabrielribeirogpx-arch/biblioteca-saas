@@ -101,7 +101,7 @@ export function UserMenu() {
 
         setLibraries(filteredLibraries);
 
-        if (!libraryId && filteredLibraries.length === 1) {
+        if (!libraryId && filteredLibraries.length > 0) {
           const firstLibraryId = String(filteredLibraries[0].id);
           setLibraryId(firstLibraryId);
           setNextLibraryId(firstLibraryId);
@@ -167,7 +167,7 @@ export function UserMenu() {
                 const selectedLibraryId = event.target.value;
                 setNextLibraryId(selectedLibraryId);
                 if (selectedLibraryId) {
-                  setLibraryId(selectedLibraryId);
+                  setLibraryId(selectedLibraryId, { reload: true });
                 }
               }}
               className="mt-1 w-full rounded border border-slate-300 px-2 py-1 text-xs"
