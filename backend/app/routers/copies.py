@@ -2,7 +2,6 @@ from fastapi import APIRouter, Depends, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import (
-    AuthContext,
     TenantScopedContext,
     get_current_user,
     get_db,
@@ -10,6 +9,7 @@ from app.api.deps import (
     require_librarian,
     require_user,
 )
+from app.models.user import User
 from app.models.audit_log import AuditActorType, AuditCategory
 from app.schemas.copies import CopyCreate, CopyOut
 from app.services.audit_service import AuditService
@@ -22,7 +22,7 @@ router = APIRouter()
 async def list_copies(
     db: AsyncSession = Depends(get_db),
     ctx: TenantScopedContext = Depends(get_tenant_context),
-    auth: AuthContext = Depends(require_user),
+    auth: User = Depends(require_user),
 ) -> list[CopyOut]:
     return await CopyService.list_copies(db, ctx.tenant.library_id, auth.tenant_id)
 
@@ -33,7 +33,7 @@ async def create_copy(
     request: Request,
     db: AsyncSession = Depends(get_db),
     ctx: TenantScopedContext = Depends(get_tenant_context),
-    auth: AuthContext = Depends(require_librarian),
+    auth: User = Depends(require_librarian),
 ) -> CopyOut:
     created = await CopyService.create_copy(db, payload, ctx.tenant.library_id)
     await AuditService.log_event(
@@ -41,7 +41,7 @@ async def create_copy(
         library_id=ctx.tenant.library_id,
         category=AuditCategory.CATALOG,
         actor_type=AuditActorType.USER,
-        actor_id=auth.user_id,
+        actor_id=auth.id,
         action="copies.create",
         entity_type="copy",
         entity_id=str(created.id),

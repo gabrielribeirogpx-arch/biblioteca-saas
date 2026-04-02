@@ -5,7 +5,6 @@ from dataclasses import dataclass
 import logging
 
 from fastapi import Depends, Header, HTTPException, Request, status
-from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 import jwt
 from sqlalchemy import select
 from sqlalchemy import text
@@ -18,10 +17,9 @@ from app.db.session import AsyncSessionLocal
 from app.models.audit_log import AuditActorType, AuditCategory
 from app.models.library import Library
 from app.models.organization import Organization
+from app.models.user import User
 from app.models.user import UserRole
-from app.schemas.auth import TokenPayload
 from app.services.audit_service import AuditService
-from app.services.auth_service import AuthService
 
 
 DEFAULT_TENANT_CODE = "default"
@@ -35,14 +33,6 @@ class TenantContext:
     organization_slug: str
     library_id: int
     library_code: str
-
-
-@dataclass(slots=True)
-class AuthContext:
-    user_id: int
-    role: UserRole
-    tenant_id: int
-    organization_id: int | None
 
 
 async def _resolve_library_from_tenant_key(db: AsyncSession, tenant_key: str) -> Library | None:
@@ -186,70 +176,10 @@ async def get_tenant_from_request(request: Request, db: AsyncSession) -> Library
     return await _resolve_library_from_tenant_key(db, tenant_key)
 
 
-async def get_current_library(
-    request: Request,
-    db: AsyncSession = Depends(get_db),
-    auth: AuthContext = Depends(get_auth_context),
-    x_library_id: str | None = Header(default=None, alias="X-Library-ID"),
-) -> TenantContext:
-    if not x_library_id or not x_library_id.strip():
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="X-Library-ID header is required")
-    if not x_library_id.strip().isdigit():
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid X-Library-ID header")
-
-    library_id = int(x_library_id.strip())
-    library = (
-        await db.execute(
-            select(Library)
-            .options(selectinload(Library.organization))
-            .where(
-                Library.id == library_id,
-                Library.tenant_id == auth.tenant_id,
-            )
-        )
-    ).scalar_one_or_none()
-    if library is None:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Library access denied")
-
-    tenant_context = TenantContext(
-        tenant_id=library.organization.slug,
-        organization_id=library.organization_id,
-        organization_slug=library.organization.slug,
-        library_id=library.id,
-        library_code=library.code,
-    )
-    request.state.tenant_context = tenant_context
-    return tenant_context
-
-
-_bearer = HTTPBearer(auto_error=False)
-
-
-async def get_auth_context(
-    request: Request,
-    credentials: HTTPAuthorizationCredentials | None = Depends(_bearer),
-) -> AuthContext:
-    if not credentials:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing bearer token")
-
-    payload: TokenPayload = AuthService.decode_access_token(credentials.credentials)
-
-    auth_context = AuthContext(
-        user_id=payload.sub,
-        role=payload.role,
-        tenant_id=payload.tenant_id,
-        organization_id=payload.organization_id,
-    )
-    request.state.auth_context = auth_context
-    return auth_context
-
-
 async def get_current_user(
     request: Request,
     db: AsyncSession = Depends(get_db),
 ):
-    from app.models.user import User
-
     auth_header = request.headers.get("Authorization")
     header_tenant_slug = request.headers.get("X-Tenant-Slug")
     header_tenant_id = request.headers.get("X-Tenant-ID")
@@ -306,6 +236,42 @@ async def get_current_user(
     return user
 
 
+async def get_current_library(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    x_library_id: str | None = Header(default=None, alias="X-Library-ID"),
+) -> TenantContext:
+    if not x_library_id or not x_library_id.strip():
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="X-Library-ID header is required")
+    if not x_library_id.strip().isdigit():
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid X-Library-ID header")
+
+    library_id = int(x_library_id.strip())
+    library = (
+        await db.execute(
+            select(Library)
+            .options(selectinload(Library.organization))
+            .where(
+                Library.id == library_id,
+                Library.tenant_id == current_user.tenant_id,
+            )
+        )
+    ).scalar_one_or_none()
+    if library is None:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Library access denied")
+
+    tenant_context = TenantContext(
+        tenant_id=library.organization.slug,
+        organization_id=library.organization_id,
+        organization_slug=library.organization.slug,
+        library_id=library.id,
+        library_code=library.code,
+    )
+    request.state.tenant_context = tenant_context
+    return tenant_context
+
+
 async def get_current_tenant(
     current_library: TenantContext = Depends(get_current_library),
     user=Depends(get_current_user),
@@ -324,42 +290,24 @@ async def get_current_tenant(
 async def resolve_context(
     request: Request,
     db: AsyncSession = Depends(get_db),
-    auth: AuthContext = Depends(get_auth_context),
+    current_user: User = Depends(get_current_user),
     tenant: TenantContext = Depends(get_current_library),
 ) -> TenantScopedContext:
-    from app.models.user import User
-
-    if tenant.organization_id and auth.organization_id and auth.organization_id != tenant.organization_id:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Organization mismatch")
-
-    origin_user = (
-        await db.execute(
-            select(User).where(
-                User.id == auth.user_id,
-                User.tenant_id == auth.tenant_id,
-                User.is_active.is_(True),
-            )
-        )
-    ).scalar_one_or_none()
-    if origin_user is None:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
-
     user = (
         await db.execute(
             select(User).where(
-                User.email == origin_user.email,
+                User.email == current_user.email,
                 User.library_id == tenant.library_id,
-                User.tenant_id == auth.tenant_id,
+                User.tenant_id == current_user.tenant_id,
                 User.is_active.is_(True),
             )
         )
     ).scalar_one_or_none()
     if user is None:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Library access denied")
-    if user.role != auth.role:
+    if user.role != current_user.role:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Library role mismatch")
 
-    request.state.auth_context = auth
     request.state.tenant_context = tenant
     return TenantScopedContext(user=user, tenant=tenant)
 
@@ -370,13 +318,13 @@ async def get_tenant_context(
     return context
 
 
-def role_guard(*allowed_roles: UserRole) -> Callable[..., AuthContext]:
+def role_guard(*allowed_roles: UserRole) -> Callable[..., User]:
     async def dependency(
         request: Request,
         db: AsyncSession = Depends(get_db),
-        auth: AuthContext = Depends(get_auth_context),
-    ) -> AuthContext:
-        if auth.role not in allowed_roles:
+        current_user: User = Depends(get_current_user),
+    ) -> User:
+        if current_user.role not in allowed_roles:
             tenant = getattr(request.state, "tenant_context", None)
             if tenant is not None:
                 await AuditService.log_event(
@@ -385,22 +333,21 @@ def role_guard(*allowed_roles: UserRole) -> Callable[..., AuthContext]:
                     library_id=tenant.library_id,
                     category=AuditCategory.SECURITY,
                     actor_type=AuditActorType.USER,
-                    actor_id=auth.user_id,
+                    actor_id=current_user.id,
                     action="rbac.permission_denied",
                     entity_type="route",
                     entity_id=f"{request.method} {request.url.path}",
                     summary="Permission denied by role guard",
                     payload={
                         "required_roles": [role.value for role in allowed_roles],
-                        "actual_role": auth.role.value,
+                        "actual_role": current_user.role.value,
                     },
                     request_id=request.headers.get("x-request-id"),
                     ip_address=request.client.host if request.client else None,
                 )
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Insufficient permissions")
 
-        request.state.auth_context = auth
-        return auth
+        return current_user
 
     return dependency
 

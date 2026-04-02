@@ -2,7 +2,6 @@ from fastapi import APIRouter, Depends, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import (
-    AuthContext,
     TenantScopedContext,
     get_current_user,
     get_db,
@@ -10,6 +9,7 @@ from app.api.deps import (
     require_librarian,
     require_user,
 )
+from app.models.user import User
 from app.models.audit_log import AuditActorType, AuditCategory
 from app.schemas.books import (
     AACR2ValidateRequest,
@@ -36,7 +36,7 @@ async def list_books(
     page_size: int = 20,
     db: AsyncSession = Depends(get_db),
     ctx: TenantScopedContext = Depends(get_tenant_context),
-    auth: AuthContext = Depends(require_user),
+    auth: User = Depends(require_user),
 ) -> BookListResponse:
     return await BookService.list_books(
         db,
@@ -53,7 +53,7 @@ async def create_book(
     request: Request,
     db: AsyncSession = Depends(get_db),
     ctx: TenantScopedContext = Depends(get_tenant_context),
-    auth: AuthContext = Depends(require_librarian),
+    auth: User = Depends(require_librarian),
 ) -> BookOut:
     created = await BookService.create_book(db, payload, ctx.tenant.library_id)
     await AuditService.log_event(
@@ -61,7 +61,7 @@ async def create_book(
         library_id=ctx.tenant.library_id,
         category=AuditCategory.CATALOG,
         actor_type=AuditActorType.USER,
-        actor_id=auth.user_id,
+        actor_id=auth.id,
         action="books.create",
         entity_type="book",
         entity_id=str(created.id),
@@ -79,7 +79,7 @@ async def import_marc21(
     request: Request,
     db: AsyncSession = Depends(get_db),
     ctx: TenantScopedContext = Depends(get_tenant_context),
-    auth: AuthContext = Depends(require_librarian),
+    auth: User = Depends(require_librarian),
 ) -> MARC21ImportResponse:
     book, normalized_record, iso2709_base64 = await BookService.import_marc21_record(
         db=db,
@@ -92,7 +92,7 @@ async def import_marc21(
         library_id=ctx.tenant.library_id,
         category=AuditCategory.CATALOG,
         actor_type=AuditActorType.USER,
-        actor_id=auth.user_id,
+        actor_id=auth.id,
         action="books.marc21.import",
         entity_type="book",
         entity_id=str(book.id),
@@ -114,7 +114,7 @@ async def export_marc21(
     request: Request,
     db: AsyncSession = Depends(get_db),
     ctx: TenantScopedContext = Depends(get_tenant_context),
-    auth: AuthContext = Depends(require_user),
+    auth: User = Depends(require_user),
 ) -> MARC21ExportResponse:
     book, normalized_record, iso2709_base64 = await BookService.export_marc21_record(
         db=db,
@@ -128,7 +128,7 @@ async def export_marc21(
         library_id=ctx.tenant.library_id,
         category=AuditCategory.CATALOG,
         actor_type=AuditActorType.USER,
-        actor_id=auth.user_id,
+        actor_id=auth.id,
         action="books.marc21.export",
         entity_type="book",
         entity_id=str(book.id),
@@ -151,7 +151,7 @@ async def validate_aacr2(
     request: Request,
     db: AsyncSession = Depends(get_db),
     ctx: TenantScopedContext = Depends(get_tenant_context),
-    auth: AuthContext = Depends(require_librarian),
+    auth: User = Depends(require_librarian),
 ) -> AACR2ValidateResponse:
     valid, errors, normalized_record = await BookService.validate_aacr2_record(
         db=db,
@@ -166,7 +166,7 @@ async def validate_aacr2(
         library_id=ctx.tenant.library_id,
         category=AuditCategory.CATALOG,
         actor_type=AuditActorType.USER,
-        actor_id=auth.user_id,
+        actor_id=auth.id,
         action="books.aacr2.validate",
         entity_type="book" if payload.book_id else "marc_record",
         entity_id=str(payload.book_id) if payload.book_id else "transient",
@@ -189,7 +189,7 @@ async def lookup_z3950(
     request: Request,
     db: AsyncSession = Depends(get_db),
     ctx: TenantScopedContext = Depends(get_tenant_context),
-    auth: AuthContext = Depends(require_librarian),
+    auth: User = Depends(require_librarian),
 ) -> Z3950LookupResponse:
     imported_books = await BookService.lookup_and_ingest_z3950(
         db=db,
@@ -203,7 +203,7 @@ async def lookup_z3950(
         library_id=ctx.tenant.library_id,
         category=AuditCategory.CATALOG,
         actor_type=AuditActorType.USER,
-        actor_id=auth.user_id,
+        actor_id=auth.id,
         action="books.z3950.lookup",
         entity_type="integration",
         entity_id="z39.50",
@@ -223,6 +223,6 @@ async def lookup_z3950(
 @router.get("/lookup", response_model=BookLookupResponse, dependencies=[Depends(get_current_user)])
 async def lookup_by_isbn(
     isbn: str,
-    _: AuthContext = Depends(require_librarian),
+    _: User = Depends(require_librarian),
 ) -> BookLookupResponse:
     return BookService.lookup_by_isbn(isbn)

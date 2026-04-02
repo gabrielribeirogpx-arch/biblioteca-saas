@@ -4,7 +4,8 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import AuthContext, TenantScopedContext, get_db, get_tenant_context, require_user
+from app.api.deps import TenantScopedContext, get_db, get_tenant_context, require_user
+from app.models.user import User
 from app.models.audit_log import AuditActorType, AuditCategory
 from app.models.fine import Fine, FineStatus
 from app.schemas.fines import FineListResponse, FineOut, FinePaymentRequest
@@ -20,7 +21,7 @@ async def list_fines(
     page_size: int = Query(default=20, ge=1, le=100),
     db: AsyncSession = Depends(get_db),
     ctx: TenantScopedContext = Depends(get_tenant_context),
-    auth: AuthContext = Depends(require_user),
+    auth: User = Depends(require_user),
 ) -> FineListResponse:
     offset = (page - 1) * page_size
     total = await db.scalar(
@@ -55,7 +56,7 @@ async def pay_fine(
     request: Request,
     db: AsyncSession = Depends(get_db),
     ctx: TenantScopedContext = Depends(get_tenant_context),
-    auth: AuthContext = Depends(require_user),
+    auth: User = Depends(require_user),
 ) -> FineOut:
     fine = await FineService.settle_fine(db, ctx.tenant.library_id, auth.tenant_id, fine_id, payload.amount)
     if not fine:
@@ -66,7 +67,7 @@ async def pay_fine(
         library_id=ctx.tenant.library_id,
         category=AuditCategory.CIRCULATION,
         actor_type=AuditActorType.USER,
-        actor_id=auth.user_id,
+        actor_id=auth.id,
         action='fines.pay',
         entity_type='fine',
         entity_id=str(fine.id),
