@@ -4,27 +4,36 @@ from decimal import Decimal
 from pydantic import BaseModel, ConfigDict, Field
 
 
-class LibraryListItem(BaseModel):
+class LibraryResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
-    code: str
     name: str
+    code: str
+    is_active: bool
+
+
+class LibraryListItem(LibraryResponse):
     tenant_id: int
     organization_id: int
-    is_active: bool
     created_at: datetime
 
 
-class LibraryCreate(BaseModel):
-    name: str
-    code: str
+class CreateLibraryRequest(BaseModel):
+    name: str = Field(min_length=1)
+    code: str = Field(min_length=1)
+    timezone: str = "America/Sao_Paulo"
     is_active: bool = True
+
+
+class LibraryCreate(CreateLibraryRequest):
+    pass
 
 
 class LibraryUpdate(BaseModel):
     name: str | None = None
     code: str | None = None
+    timezone: str | None = None
     is_active: bool | None = None
 
 

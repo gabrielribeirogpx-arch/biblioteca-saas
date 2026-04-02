@@ -48,6 +48,7 @@ export interface LibraryOption {
 export interface LibraryCreateInput {
   name: string;
   code: string;
+  timezone?: string;
   is_active: boolean;
 }
 
@@ -341,7 +342,7 @@ export async function createLibrary(payload: LibraryCreateInput): Promise<Librar
 
 export async function updateLibrary(libraryId: number, payload: LibraryUpdateInput): Promise<LibraryOption | null> {
   return await apiFetch<LibraryOption>(`/api/v1/libraries/${libraryId}`, {
-    method: 'PUT',
+    method: 'PATCH',
     body: JSON.stringify(payload)
   });
 }

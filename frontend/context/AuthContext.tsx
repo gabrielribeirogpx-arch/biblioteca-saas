@@ -2,15 +2,17 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 
-import { apiFetch, getStoredLibraryId, getStoredTenantId, getStoredToken, setStoredLibraryId, setStoredTenantId } from '../lib/api';
+import { apiFetch, getStoredLibraryId, getStoredTenantId, getStoredToken, setStoredLibraryId, setStoredTenantId, type UserRole } from '../lib/api';
 
 interface AuthUser {
   email: string;
+  role: UserRole;
 }
 
 interface AuthContextValue {
   user: AuthUser | null;
   token: string | null;
+  role: UserRole | null;
   isAuthenticated: boolean;
   isLoading: boolean;
   libraryId: string | null;
@@ -20,6 +22,33 @@ interface AuthContextValue {
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
+
+function parseTokenClaims(token: string): Record<string, unknown> | null {
+  const [, payload] = token.split('.');
+  if (!payload) {
+    return null;
+  }
+
+  try {
+    return JSON.parse(atob(payload.replace(/-/g, '+').replace(/_/g, '/'))) as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+}
+
+function resolveRole(token: string | null): UserRole | null {
+  if (!token) {
+    return null;
+  }
+
+  const payload = parseTokenClaims(token);
+  const role = payload?.role;
+  if (typeof role === 'string' && ['super_admin', 'librarian', 'assistant', 'member'].includes(role)) {
+    return role as UserRole;
+  }
+
+  return null;
+}
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [token, setToken] = useState<string | null>(null);
@@ -36,9 +65,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const storedToken = getStoredToken();
     const storedEmail = window.localStorage.getItem('user_email');
     const storedLibraryId = getStoredLibraryId();
+    const parsedRole = resolveRole(storedToken) ?? 'member';
 
     setToken(storedToken);
-    setUser(storedToken && storedEmail ? { email: storedEmail } : null);
+    setUser(storedToken && storedEmail ? { email: storedEmail, role: parsedRole } : null);
     setLibraryIdState(storedLibraryId);
     setIsLoading(false);
   }, []);
@@ -104,17 +134,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       throw new Error('Token de acesso não retornado pela API');
     }
     const normalizedToken = data.access_token.trim().replace(/^Bearer\s+/i, '');
-    const tokenParts = normalizedToken.split('.');
-    if (tokenParts.length >= 2) {
-      try {
-        const payload = JSON.parse(atob(tokenParts[1].replace(/-/g, '+').replace(/_/g, '/')));
-        if (payload.library_id) {
-          setStoredLibraryId(String(payload.library_id));
-          setLibraryIdState(String(payload.library_id));
-        }
-      } catch {
-        // no-op
-      }
+    const payload = parseTokenClaims(normalizedToken);
+    if (payload?.library_id) {
+      setStoredLibraryId(String(payload.library_id));
+      setLibraryIdState(String(payload.library_id));
     }
 
     if (typeof window !== 'undefined') {
@@ -125,11 +148,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     setToken(normalizedToken);
-    setUser({ email: sanitizedEmail });
+    setUser({ email: sanitizedEmail, role: resolveRole(normalizedToken) ?? 'member' });
   }, []);
 
   const value = useMemo(
-    () => ({ user, token, libraryId, setLibraryId, isAuthenticated: Boolean(token), isLoading, login, logout }),
+    () => ({ user, token, role: user?.role ?? null, libraryId, setLibraryId, isAuthenticated: Boolean(token), isLoading, login, logout }),
     [user, token, libraryId, setLibraryId, isLoading, login, logout]
   );
 
