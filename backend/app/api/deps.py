@@ -16,7 +16,7 @@ from app.core.config import settings
 from app.db.session import AsyncSessionLocal
 from app.models.audit_log import AuditActorType, AuditCategory
 from app.models.library import Library
-from app.models.organization import Organization
+from app.models.tenant import Tenant
 from app.models.user import User
 from app.models.user import UserRole
 from app.services.audit_service import AuditService
@@ -40,12 +40,15 @@ async def _resolve_library_from_tenant_key(db: AsyncSession, tenant_key: str) ->
     def _build_query():
         return (
             select(Library)
+            .join(Tenant, Tenant.id == Library.tenant_id)
             .options(selectinload(Library.organization))
-            .where(Library.code == tenant_key)
+            .options(selectinload(Library.tenant))
+            .where(Tenant.slug == tenant_key)
+            .order_by(Library.id.asc())
         )
 
     try:
-        library = (await db.execute(_build_query())).scalar_one_or_none()
+        library = (await db.execute(_build_query())).scalars().first()
     except ProgrammingError as exc:
         error_message = str(getattr(exc, "orig", exc)).lower()
         if "libraries.is_active" not in error_message and "is_active" not in error_message:
@@ -53,23 +56,11 @@ async def _resolve_library_from_tenant_key(db: AsyncSession, tenant_key: str) ->
         await db.rollback()
         await db.execute(text("ALTER TABLE libraries ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT TRUE"))
         await db.commit()
-        library = (await db.execute(_build_query())).scalar_one_or_none()
+        library = (await db.execute(_build_query())).scalars().first()
 
     if library:
         return library
-
-    organization = (await db.execute(select(Organization).where(Organization.slug == tenant_key))).scalar_one_or_none()
-    if not organization:
-        return None
-
-    return (
-        await db.execute(
-            select(Library)
-            .options(selectinload(Library.organization))
-            .where(Library.organization_id == organization.id)
-            .order_by(Library.id.asc())
-        )
-    ).scalars().first()
+    return None
 
 
 @dataclass(slots=True)
@@ -142,6 +133,7 @@ async def resolve_tenant(
             await db.execute(
                 select(Library)
                 .options(selectinload(Library.organization))
+                .options(selectinload(Library.tenant))
                 .where(Library.id == int(x_library_id.strip()))
             )
         ).scalar_one_or_none()
@@ -149,7 +141,7 @@ async def resolve_tenant(
             library = forced_library
 
     tenant_context = TenantContext(
-        tenant_id=library.code,
+        tenant_id=library.tenant.slug,
         organization_id=library.organization_id,
         organization_slug=library.organization.slug,
         library_id=library.id,
@@ -209,9 +201,6 @@ async def get_current_user(
 
     user_id = payload.get("sub")
 
-    print("payload:", payload)
-    print("user_id:", user_id)
-
     if user_id is None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
 
@@ -221,8 +210,6 @@ async def get_current_user(
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token subject") from None
 
     user = (await db.execute(select(User).where(User.id == user_id))).scalar_one_or_none()
-    print("user:", user)
-
     if not user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
     if not user.is_active:
@@ -256,6 +243,7 @@ async def get_current_library(
         await db.execute(
             select(Library)
             .options(selectinload(Library.organization))
+            .options(selectinload(Library.tenant))
             .where(
                 Library.id == library_id,
                 Library.tenant_id == current_user.tenant_id,
@@ -266,7 +254,7 @@ async def get_current_library(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Library access denied")
 
     tenant_context = TenantContext(
-        tenant_id=library.organization.slug,
+        tenant_id=library.tenant.slug,
         organization_id=library.organization_id,
         organization_slug=library.organization.slug,
         library_id=library.id,

@@ -93,9 +93,6 @@ class AuthService:
                 )
             ).scalar_one_or_none()
 
-            print("Tenant:", tenant.id)
-            print("User:", user)
-
             if not user:
                 raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Usuário não encontrado")
 
@@ -134,7 +131,7 @@ class AuthService:
                 sub=user.id,
                 role=user.role,
                 tenant_id=user.tenant_id or tenant.tenant_id or tenant.organization_id,
-                tenant=tenant.code,
+                tenant=tenant.tenant.slug,
                 library_id=tenant.id,
                 organization_id=tenant.organization_id,
             )

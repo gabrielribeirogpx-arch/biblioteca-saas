@@ -268,8 +268,6 @@ function buildUrl(baseUrl: string, endpoint: string): string {
 
 export async function apiFetch<T = unknown>(url: string, options: RequestInit = {}): Promise<T | null> {
   const token = getStoredToken();
-  const tokenClaims = token ? parseJwtClaims(token) : null;
-  const tenant = getTenant();
   const libraryId = getStoredLibraryId();
   const isProtectedEndpoint = url.startsWith('/api/v1/') && !url.startsWith('/api/v1/auth/login');
   const isLibraryListingEndpoint = url === '/api/v1/libraries' || url.startsWith('/api/v1/libraries?');
@@ -293,15 +291,6 @@ export async function apiFetch<T = unknown>(url: string, options: RequestInit = 
   }
 
   if (url.startsWith('/api/v1/')) {
-    const tokenTenantId = tokenClaims && tokenClaims.tenant_id != null ? String(tokenClaims.tenant_id) : null;
-    const effectiveTenantId = tokenTenantId ?? tenant;
-
-    if (!headers.has('X-Tenant-ID')) {
-      headers.set('X-Tenant-ID', effectiveTenantId);
-    }
-    if (!headers.has('x-tenant-slug')) {
-      headers.set('x-tenant-slug', effectiveTenantId);
-    }
     if (libraryId && !headers.has('X-Library-ID')) {
       headers.set('X-Library-ID', libraryId);
       headers.set('x-library-id', libraryId);

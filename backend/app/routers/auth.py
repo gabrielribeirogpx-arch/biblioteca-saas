@@ -1,9 +1,11 @@
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.api.deps import get_current_user, get_db
 from app.models.library import Library
+from app.models.tenant import Tenant
 from app.models.user import User
 from app.schemas.auth import AccessTokenResponse, LoginRequest, SwitchLibraryRequest, TokenPayload, TokenResponse
 from app.services.auth_service import AuthService
@@ -29,10 +31,16 @@ async def login(
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Tenant obrigatório")
 
         tenant = normalize_slug(tenant.strip())
-        query = select(Library).where(Library.code == tenant)
+        query = (
+            select(Library)
+            .options(selectinload(Library.tenant))
+            .join(Tenant, Tenant.id == Library.tenant_id)
+            .where(Tenant.slug == tenant)
+            .order_by(Library.id.asc())
+        )
         if library_id and library_id.strip().isdigit():
-            query = select(Library).where(Library.id == int(library_id.strip()))
-        library = (await db.execute(query)).scalar_one_or_none()
+            query = query.where(Library.id == int(library_id.strip()))
+        library = (await db.execute(query)).scalars().first()
 
         if not library:
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Tenant não encontrado")
@@ -55,7 +63,9 @@ async def switch_library(
 ) -> AccessTokenResponse:
     library = (
         await db.execute(
-            select(Library).where(
+            select(Library)
+            .options(selectinload(Library.tenant))
+            .where(
                 Library.id == body.library_id,
                 Library.tenant_id == current_user.tenant_id,
             )
@@ -67,7 +77,7 @@ async def switch_library(
     token_payload = TokenPayload(
         sub=current_user.id,
         tenant_id=current_user.tenant_id or library.tenant_id,
-        tenant=library.code,
+        tenant=library.tenant.slug,
         library_id=library.id,
         role=current_user.role,
         organization_id=library.organization_id,

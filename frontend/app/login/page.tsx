@@ -5,7 +5,6 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { FormEvent, useEffect, useState } from 'react';
 
 import { useAuth } from '../../context/AuthContext';
-import { getTenant } from '../../lib/api';
 
 export default function LoginPage() {
   const { login, isAuthenticated, isLoading } = useAuth();
@@ -13,21 +12,14 @@ export default function LoginPage() {
   const searchParams = useSearchParams();
   const [email, setEmail] = useState(searchParams.get('email') ?? '');
   const [password, setPassword] = useState('');
-  const [tenant, setTenant] = useState(searchParams.get('tenant') ?? '');
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  const tenantParam = tenant.trim() || undefined;
 
   useEffect(() => {
     if (!isLoading && isAuthenticated) {
-      const resolvedTenant = tenantParam ?? getTenant().trim();
-      if (!resolvedTenant) {
-        router.replace('/login');
-        return;
-      }
-      router.replace(`/t/${resolvedTenant}/dashboard`);
+      router.replace('/dashboard');
     }
-  }, [isAuthenticated, isLoading, router, tenantParam]);
+  }, [isAuthenticated, isLoading, router]);
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -35,13 +27,8 @@ export default function LoginPage() {
     setSubmitting(true);
 
     try {
-      await login(email, password, tenantParam);
-      const resolvedTenant = tenantParam ?? getTenant().trim();
-      if (resolvedTenant) {
-        router.replace(`/t/${resolvedTenant}/dashboard`);
-        return;
-      }
-      router.replace('/login');
+      await login(email, password);
+      router.replace('/dashboard');
     } catch (submitError) {
       setError(submitError instanceof Error ? submitError.message : 'Falha ao autenticar');
     } finally {
@@ -78,19 +65,6 @@ export default function LoginPage() {
             value={password}
           />
         </label>
-
-        <label className="block text-sm font-medium text-slate-700">
-          Tenant
-          <input
-            className="mt-1 w-full rounded-lg border px-3 py-2"
-            name="tenant"
-            onChange={(event) => setTenant(event.target.value)}
-            placeholder="ex: biblioteca-municipal"
-            required
-            value={tenant}
-          />
-        </label>
-
         {error ? <p className="text-sm text-red-600">{error}</p> : null}
 
         <button

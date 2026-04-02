@@ -166,10 +166,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const login = useCallback(async (email: string, password: string, tenantId?: string, requestedLibraryId?: string) => {
     const resolvedTenantId = (tenantId ?? getStoredTenantId()).trim();
     const resolvedLibraryId = requestedLibraryId?.trim() || getStoredLibraryId() || '';
-
-    if (!resolvedTenantId) {
-      throw new Error('Informe o tenant para acessar sua biblioteca');
-    }
     const sanitizedEmail = email.trim();
     const sanitizedPassword = password;
     let data: LoginResponse | null = null;
@@ -178,7 +174,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'X-Tenant-ID': resolvedTenantId,
           ...(resolvedLibraryId ? { 'X-Library-ID': resolvedLibraryId } : {})
         },
         body: JSON.stringify({ email: sanitizedEmail, password: sanitizedPassword, tenant: resolvedTenantId })
