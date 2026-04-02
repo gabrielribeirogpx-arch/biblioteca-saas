@@ -82,4 +82,4 @@ class Reservation(Base):
     library = relationship("Library", back_populates="reservations", overlaps="user,copy,reservations")
     user = relationship("User", back_populates="reservations", overlaps="library,copy,reservations")
     copy = relationship("Copy", back_populates="reservations", overlaps="library,user,reservations")
-    book = relationship("Book", overlaps="library,reservations")
+    book = relationship("Book", overlaps="library,copy,reservations")

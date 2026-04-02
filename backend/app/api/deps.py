@@ -206,44 +206,67 @@ async def get_request_context(
     request: Request,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
+    tenant_context: TenantContext = Depends(resolve_tenant),
     x_library_id: str | None = Header(default=None, alias="X-Library-ID"),
 ) -> TenantScopedContext:
-    requested_library_id = x_library_id or request.query_params.get("library_id")
-    if not requested_library_id:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="library_id obrigatório")
-    if not requested_library_id.strip().isdigit():
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid library_id")
+    effective_tenant_id = current_user.tenant_id or tenant_context.tenant_id
+    if current_user.tenant_id is not None and tenant_context.tenant_id != current_user.tenant_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Tenant mismatch")
 
-    library_id = int(requested_library_id.strip())
-    library = (
-        await db.execute(
-            select(Library)
-            .options(selectinload(Library.organization))
-            .options(selectinload(Library.tenant))
-            .where(
-                Library.id == library_id,
-                Library.tenant_id == current_user.tenant_id,
+    requested_library_id = x_library_id or request.query_params.get("library_id")
+    library_id: int | None = None
+    if requested_library_id is not None:
+        normalized_library_id = requested_library_id.strip()
+        if not normalized_library_id.isdigit():
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid library_id")
+        library_id = int(normalized_library_id)
+    elif tenant_context.tenant_id == effective_tenant_id:
+        library_id = tenant_context.library_id
+
+    if library_id is not None:
+        library = (
+            await db.execute(
+                select(Library)
+                .options(selectinload(Library.organization))
+                .options(selectinload(Library.tenant))
+                .where(
+                    Library.id == library_id,
+                    Library.tenant_id == effective_tenant_id,
+                )
             )
-        )
-    ).scalar_one_or_none()
+        ).scalar_one_or_none()
+    else:
+        library = None
+
+    if library is None:
+        library = (
+            await db.execute(
+                select(Library)
+                .options(selectinload(Library.organization))
+                .options(selectinload(Library.tenant))
+                .where(
+                    Library.tenant_id == effective_tenant_id,
+                    Library.is_active.is_(True),
+                )
+                .order_by(Library.id.asc())
+            )
+        ).scalars().first()
+
     if library is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Library não encontrada")
 
-    if library.tenant_id != current_user.tenant_id:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Acesso negado")
-
-    if not await RBACService.user_has_library_access(db=db, user=current_user, library_id=library_id):
+    if not await RBACService.user_has_library_access(db=db, user=current_user, library_id=library.id):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Acesso à biblioteca negado")
 
-    tenant_context = TenantContext(
+    resolved_tenant_context = TenantContext(
         tenant_id=library.tenant_id,
         organization_id=library.organization_id,
         organization_slug=library.organization.slug,
         library_id=library.id,
         library_code=library.code,
     )
-    request.state.tenant_context = tenant_context
-    return TenantScopedContext(user=current_user, tenant=tenant_context)
+    request.state.tenant_context = resolved_tenant_context
+    return TenantScopedContext(user=current_user, tenant=resolved_tenant_context)
 
 
 async def get_current_library(

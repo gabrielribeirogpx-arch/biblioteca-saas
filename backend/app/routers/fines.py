@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import TenantScopedContext, get_db, get_tenant_context, require_user
+from app.api.deps import TenantScopedContext, get_db, resolve_context, require_user
 from app.models.user import User
 from app.models.audit_log import AuditActorType, AuditCategory
 from app.models.fine import Fine, FineStatus
@@ -20,16 +20,16 @@ async def list_fines(
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=100),
     db: AsyncSession = Depends(get_db),
-    ctx: TenantScopedContext = Depends(get_tenant_context),
+    ctx: TenantScopedContext = Depends(resolve_context),
     auth: User = Depends(require_user),
 ) -> FineListResponse:
     offset = (page - 1) * page_size
     total = await db.scalar(
-        select(func.count()).select_from(Fine).where(Fine.library_id == ctx.tenant.library_id, Fine.tenant_id == auth.tenant_id)
+        select(func.count()).select_from(Fine).where(Fine.library_id == ctx.tenant.library_id, Fine.tenant_id == ctx.tenant.tenant_id)
     )
     result = await db.execute(
         select(Fine)
-        .where(Fine.library_id == ctx.tenant.library_id, Fine.tenant_id == auth.tenant_id)
+        .where(Fine.library_id == ctx.tenant.library_id, Fine.tenant_id == ctx.tenant.tenant_id)
         .order_by(Fine.created_at.desc(), Fine.id.desc())
         .offset(offset)
         .limit(page_size)
@@ -55,10 +55,10 @@ async def pay_fine(
     payload: FinePaymentRequest,
     request: Request,
     db: AsyncSession = Depends(get_db),
-    ctx: TenantScopedContext = Depends(get_tenant_context),
+    ctx: TenantScopedContext = Depends(resolve_context),
     auth: User = Depends(require_user),
 ) -> FineOut:
-    fine = await FineService.settle_fine(db, ctx.tenant.library_id, auth.tenant_id, fine_id, payload.amount)
+    fine = await FineService.settle_fine(db, ctx.tenant.library_id, ctx.tenant.tenant_id, fine_id, payload.amount)
     if not fine:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Fine not found')
 

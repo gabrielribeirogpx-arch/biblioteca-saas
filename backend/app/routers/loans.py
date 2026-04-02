@@ -5,7 +5,7 @@ from app.api.deps import (
     TenantScopedContext,
     get_current_user,
     get_db,
-    get_tenant_context,
+    resolve_context,
     require_librarian,
     require_user,
 )
@@ -23,20 +23,20 @@ async def list_loans(
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=100),
     db: AsyncSession = Depends(get_db),
-    ctx: TenantScopedContext = Depends(get_tenant_context),
+    ctx: TenantScopedContext = Depends(resolve_context),
     auth: User = Depends(require_user),
 ) -> LoanListResponse:
-    return await LoanService.list_loans(db, ctx.tenant.library_id, auth.tenant_id, page=page, page_size=page_size)
+    return await LoanService.list_loans(db, ctx.tenant.library_id, ctx.tenant.tenant_id, page=page, page_size=page_size)
 
 
 @router.get("/{loan_id}", response_model=LoanOut, dependencies=[Depends(get_current_user)])
 async def get_loan(
     loan_id: int,
     db: AsyncSession = Depends(get_db),
-    ctx: TenantScopedContext = Depends(get_tenant_context),
+    ctx: TenantScopedContext = Depends(resolve_context),
     auth: User = Depends(require_user),
 ) -> LoanOut:
-    return await LoanService.get_loan(db, ctx.tenant.library_id, auth.tenant_id, loan_id)
+    return await LoanService.get_loan(db, ctx.tenant.library_id, ctx.tenant.tenant_id, loan_id)
 
 
 @router.post("/", response_model=LoanOut, dependencies=[Depends(get_current_user)])
@@ -44,10 +44,10 @@ async def create_loan(
     payload: LoanCreate,
     request: Request,
     db: AsyncSession = Depends(get_db),
-    ctx: TenantScopedContext = Depends(get_tenant_context),
+    ctx: TenantScopedContext = Depends(resolve_context),
     auth: User = Depends(require_librarian),
 ) -> LoanOut:
-    created = await LoanService.create_loan(db, payload, ctx.tenant.library_id, auth.tenant_id, ctx.user.id)
+    created = await LoanService.create_loan(db, payload, ctx.tenant.library_id, ctx.tenant.tenant_id, ctx.user.id)
     await AuditService.log_event(
         db=db,
         library_id=ctx.tenant.library_id,
@@ -71,10 +71,10 @@ async def renew_loan(
     payload: LoanRenewRequest,
     request: Request,
     db: AsyncSession = Depends(get_db),
-    ctx: TenantScopedContext = Depends(get_tenant_context),
+    ctx: TenantScopedContext = Depends(resolve_context),
     auth: User = Depends(require_librarian),
 ) -> LoanOut:
-    renewed = await LoanService.renew_loan(db, ctx.tenant.library_id, auth.tenant_id, loan_id, payload.renewal_days)
+    renewed = await LoanService.renew_loan(db, ctx.tenant.library_id, ctx.tenant.tenant_id, loan_id, payload.renewal_days)
     await AuditService.log_event(
         db=db,
         library_id=ctx.tenant.library_id,
@@ -97,7 +97,7 @@ async def renew_loan_alias(
     payload: LoanRenewRequest,
     request: Request,
     db: AsyncSession = Depends(get_db),
-    ctx: TenantScopedContext = Depends(get_tenant_context),
+    ctx: TenantScopedContext = Depends(resolve_context),
     auth: User = Depends(require_librarian),
 ) -> LoanOut:
     if payload.loan_id is None:
@@ -110,10 +110,10 @@ async def return_loan(
     loan_id: int,
     request: Request,
     db: AsyncSession = Depends(get_db),
-    ctx: TenantScopedContext = Depends(get_tenant_context),
+    ctx: TenantScopedContext = Depends(resolve_context),
     auth: User = Depends(require_librarian),
 ) -> LoanOut:
-    returned = await LoanService.return_loan(db, ctx.tenant.library_id, auth.tenant_id, loan_id)
+    returned = await LoanService.return_loan(db, ctx.tenant.library_id, ctx.tenant.tenant_id, loan_id)
     await AuditService.log_event(
         db=db,
         library_id=ctx.tenant.library_id,
@@ -136,7 +136,7 @@ async def return_loan_alias(
     loan_id: int,
     request: Request,
     db: AsyncSession = Depends(get_db),
-    ctx: TenantScopedContext = Depends(get_tenant_context),
+    ctx: TenantScopedContext = Depends(resolve_context),
     auth: User = Depends(require_librarian),
 ) -> LoanOut:
     return await return_loan(loan_id, request, db, ctx, auth)

@@ -3,7 +3,7 @@ from sqlalchemy import String, func, select
 from sqlalchemy.exc import ProgrammingError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import TenantScopedContext, get_db, get_tenant_context, require_librarian, require_user
+from app.api.deps import TenantScopedContext, get_db, resolve_context, require_librarian, require_user
 from app.models.user import User
 from app.models.audit_log import AuditActorType, AuditCategory
 from app.models.reservation import Reservation, ReservationStatus
@@ -42,13 +42,13 @@ async def create_reservation(
     payload: ReservationCreate,
     request: Request,
     db: AsyncSession = Depends(get_db),
-    ctx: TenantScopedContext = Depends(get_tenant_context),
+    ctx: TenantScopedContext = Depends(resolve_context),
     auth: User = Depends(require_user),
 ) -> ReservationOut:
     reservation = await ReservationService.create_reservation(
         db,
         ctx.tenant.library_id,
-        auth.tenant_id,
+        ctx.tenant.tenant_id,
         auth.id,
         payload.book_id,
     )
@@ -83,14 +83,14 @@ async def list_reservations(
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=100),
     db: AsyncSession = Depends(get_db),
-    ctx: TenantScopedContext = Depends(get_tenant_context),
+    ctx: TenantScopedContext = Depends(resolve_context),
     auth: User = Depends(require_user),
 ) -> ReservationListResponse:
     offset = (page - 1) * page_size
     total = await db.scalar(
         select(func.count()).select_from(Reservation).where(
             Reservation.library_id == ctx.tenant.library_id,
-            Reservation.tenant_id == auth.tenant_id,
+            Reservation.tenant_id == ctx.tenant.tenant_id,
         )
     )
     reservation_table = Reservation.__table__
@@ -108,7 +108,7 @@ async def list_reservations(
             )
             .where(
                 reservation_table.c.library_id == ctx.tenant.library_id,
-                reservation_table.c.tenant_id == auth.tenant_id,
+                reservation_table.c.tenant_id == ctx.tenant.tenant_id,
             )
             .order_by(
                 reservation_table.c.copy_id.asc(),
@@ -141,7 +141,7 @@ async def list_reservations(
             )
             .where(
                 reservation_table.c.library_id == ctx.tenant.library_id,
-                reservation_table.c.tenant_id == auth.tenant_id,
+                reservation_table.c.tenant_id == ctx.tenant.tenant_id,
             )
             .order_by(
                 reservation_table.c.book_id.asc(),
@@ -172,14 +172,14 @@ async def cancel_reservation(
     reservation_id: int,
     request: Request,
     db: AsyncSession = Depends(get_db),
-    ctx: TenantScopedContext = Depends(get_tenant_context),
+    ctx: TenantScopedContext = Depends(resolve_context),
     auth: User = Depends(require_user),
 ) -> MessageResponse:
     reservation = (
         await db.execute(
             select(Reservation).where(
                 Reservation.library_id == ctx.tenant.library_id,
-                Reservation.tenant_id == auth.tenant_id,
+                Reservation.tenant_id == ctx.tenant.tenant_id,
                 Reservation.id == reservation_id,
             )
         )
@@ -210,8 +210,8 @@ async def cancel_reservation(
 @router.post('/process-queue', response_model=MessageResponse)
 async def process_reservation_queue(
     db: AsyncSession = Depends(get_db),
-    ctx: TenantScopedContext = Depends(get_tenant_context),
+    ctx: TenantScopedContext = Depends(resolve_context),
     auth: User = Depends(require_librarian),
 ) -> MessageResponse:
-    processed = await ReservationService.process_queue(db, ctx.tenant.library_id, auth.tenant_id)
+    processed = await ReservationService.process_queue(db, ctx.tenant.library_id, ctx.tenant.tenant_id)
     return MessageResponse(message=f'Reservation queue processed: {processed} updates')
