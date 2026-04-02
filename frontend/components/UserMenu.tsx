@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 
 import { useAuth } from '../context/AuthContext';
-import { apiFetch, getLibraries, type LibraryOption } from '../lib/api';
+import { apiFetch, type LibraryOption } from '../lib/api';
 
 interface StoredUser {
   email?: string;
@@ -36,13 +36,8 @@ function parseTenantIdFromToken(token: string | null): string | null {
 }
 
 async function getDropdownLibraries(): Promise<LibraryOption[]> {
-  const libraries = await apiFetch<LibraryOption[]>('/libraries');
-
-  if (libraries && Array.isArray(libraries)) {
-    return libraries;
-  }
-
-  return getLibraries();
+  const libraries = await apiFetch<LibraryOption[]>('/api/v1/libraries');
+  return Array.isArray(libraries) ? libraries : [];
 }
 
 export function UserMenu() {
