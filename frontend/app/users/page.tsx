@@ -17,9 +17,8 @@ interface UserRow {
 }
 
 export default function UsersPage() {
-  const role = 'librarian';
+  const { token, role, loading } = useAuth();
   const [rows, setRows] = useState<UserRow[]>([]);
-  const { token, loading } = useAuth();
 
   useEffect(() => {
     let isMounted = true;
@@ -55,7 +54,7 @@ export default function UsersPage() {
   return (
     <ProtectedRoute>
       <AppShell
-      role={role}
+      role={role ?? 'member'}
       title="Users"
       subtitle="Administer tenant user access and role assignments for secure operations."
     >

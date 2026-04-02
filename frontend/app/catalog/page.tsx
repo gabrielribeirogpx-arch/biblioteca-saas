@@ -17,9 +17,8 @@ interface CatalogRow {
 }
 
 export default function CatalogPage() {
-  const role = 'librarian';
+  const { token, role, loading } = useAuth();
   const [rows, setRows] = useState<CatalogRow[]>([]);
-  const { token, loading } = useAuth();
 
   useEffect(() => {
     let isMounted = true;
@@ -55,7 +54,7 @@ export default function CatalogPage() {
   return (
     <ProtectedRoute>
       <AppShell
-      role={role}
+      role={role ?? 'member'}
       title="Catalog"
       subtitle="Search and review AACR2-ready catalog records in one operational queue."
     >

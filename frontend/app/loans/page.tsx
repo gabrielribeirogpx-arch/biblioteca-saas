@@ -18,9 +18,8 @@ interface LoanRow {
 }
 
 export default function LoansPage() {
-  const role = 'librarian';
+  const { token, role, loading } = useAuth();
   const [rows, setRows] = useState<LoanRow[]>([]);
-  const { token, loading } = useAuth();
 
   useEffect(() => {
     let isMounted = true;
@@ -57,7 +56,7 @@ export default function LoansPage() {
   return (
     <ProtectedRoute>
       <AppShell
-      role={role}
+      role={role ?? 'member'}
       title="Loans"
       subtitle="Process checkouts, monitor due dates, and return circulation assets quickly."
     >

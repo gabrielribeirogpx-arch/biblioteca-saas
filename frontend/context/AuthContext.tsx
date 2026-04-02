@@ -5,6 +5,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState } 
 import { apiFetch, getStoredLibraryId, getStoredTenantId, getStoredToken, setStoredLibraryId, setStoredTenantId, type UserRole } from '../lib/api';
 
 interface AuthUser {
+  id: number;
   email: string;
   role: UserRole;
 }
@@ -50,6 +51,33 @@ function resolveRole(token: string | null): UserRole | null {
   return null;
 }
 
+function parseStoredUser(): AuthUser | null {
+  if (typeof window === 'undefined') {
+    return null;
+  }
+
+  const rawUser = window.localStorage.getItem('user');
+  if (!rawUser) {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(rawUser) as Partial<AuthUser>;
+    if (
+      typeof parsed?.id === 'number'
+      && typeof parsed?.email === 'string'
+      && typeof parsed?.role === 'string'
+      && ['super_admin', 'librarian', 'assistant', 'member'].includes(parsed.role)
+    ) {
+      return { id: parsed.id, email: parsed.email, role: parsed.role as UserRole };
+    }
+  } catch {
+    return null;
+  }
+
+  return null;
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [token, setToken] = useState<string | null>(null);
   const [user, setUser] = useState<AuthUser | null>(null);
@@ -63,12 +91,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     const storedToken = getStoredToken();
-    const storedEmail = window.localStorage.getItem('user_email');
+    const storedUser = parseStoredUser();
     const storedLibraryId = getStoredLibraryId();
-    const parsedRole = resolveRole(storedToken) ?? 'member';
-
     setToken(storedToken);
-    setUser(storedToken && storedEmail ? { email: storedEmail, role: parsedRole } : null);
+    if (storedToken && storedUser) {
+      setUser(storedUser);
+    } else {
+      setUser(null);
+    }
     setLibraryIdState(storedLibraryId);
     setIsLoading(false);
   }, []);
@@ -115,9 +145,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
     const sanitizedEmail = email.trim();
     const sanitizedPassword = password;
-    let data: { access_token?: string } | null = null;
+    let data: { access_token?: string; user?: AuthUser } | null = null;
     try {
-      data = await apiFetch<{ access_token?: string }>('/api/v1/auth/login', {
+      data = await apiFetch<{ access_token?: string; user?: AuthUser }>('/api/v1/auth/login', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -130,7 +160,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       throw new Error('Credenciais inválidas');
     }
 
-    if (!data?.access_token) {
+    if (!data?.access_token || !data?.user) {
       throw new Error('Token de acesso não retornado pela API');
     }
     const normalizedToken = data.access_token.trim().replace(/^Bearer\s+/i, '');
@@ -141,18 +171,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     if (typeof window !== 'undefined') {
+      window.localStorage.removeItem('user');
       window.localStorage.setItem('access_token', normalizedToken);
       window.localStorage.setItem('token', normalizedToken);
-      window.localStorage.setItem('user_email', sanitizedEmail);
+      window.localStorage.setItem('user', JSON.stringify(data.user));
+      window.localStorage.setItem('user_email', data.user.email);
       setStoredTenantId(resolvedTenantId);
     }
 
     setToken(normalizedToken);
-    setUser({ email: sanitizedEmail, role: resolveRole(normalizedToken) ?? 'member' });
+    setUser({
+      id: data.user.id,
+      email: data.user.email,
+      role: data.user.role ?? resolveRole(normalizedToken) ?? 'member'
+    });
   }, []);
 
   const value = useMemo(
-    () => ({ user, token, role: user?.role ?? null, libraryId, setLibraryId, isAuthenticated: Boolean(token), isLoading, login, logout }),
+    () => ({ user, token, role: user?.role ?? null, libraryId, setLibraryId, isAuthenticated: Boolean(token && user), isLoading, login, logout }),
     [user, token, libraryId, setLibraryId, isLoading, login, logout]
   );
 

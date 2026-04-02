@@ -24,8 +24,7 @@ interface OverdueRow {
 }
 
 export default function ReportsPage() {
-  const role = 'librarian';
-  const { token, loading } = useAuth();
+  const { token, role, loading } = useAuth();
   const [reportData, setReportData] = useState<{ mostBorrowed: MostBorrowedRow[]; overdue: OverdueRow[] }>({
     mostBorrowed: [],
     overdue: []
@@ -72,7 +71,7 @@ export default function ReportsPage() {
   return (
     <ProtectedRoute>
       <AppShell
-      role={role}
+      role={role ?? 'member'}
       title="Reports"
       subtitle="Review high-impact operational indicators for policy and performance workflows."
     >
