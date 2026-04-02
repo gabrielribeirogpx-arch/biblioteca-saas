@@ -47,7 +47,7 @@ export interface LibraryOption {
 
 export interface LibraryCreateInput {
   name: string;
-  code: string;
+  code?: string;
   timezone?: string;
   is_active: boolean;
 }

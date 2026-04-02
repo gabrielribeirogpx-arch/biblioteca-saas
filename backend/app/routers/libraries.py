@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import AuthContext, get_current_user, get_db, require_admin
 from app.models.library import Library
 from app.models.library_policy import LibraryPolicy
+from app.models.user import User
 from app.schemas.libraries import (
     CreateLibraryRequest,
     LibraryListItem,
@@ -41,13 +42,19 @@ async def _get_tenant_library_or_404(db: AsyncSession, library_id: int, tenant_i
     return library
 
 
-@router.post("", response_model=LibraryListItem)
+@router.post("", response_model=LibraryListItem, status_code=status.HTTP_201_CREATED)
 async def create_library(
     payload: CreateLibraryRequest,
     db: AsyncSession = Depends(get_db),
-    current_user=Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
     _auth: AuthContext = Depends(require_admin),
 ) -> LibraryListItem:
+    if current_user is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Unauthorized")
+
+    print("USER:", current_user)
+    print("BODY:", payload)
+
     source_library = (
         await db.execute(
             select(Library).where(
