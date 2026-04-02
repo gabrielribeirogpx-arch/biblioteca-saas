@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import type { Metadata } from 'next';
 
+import { ReserveButton } from '../../../../../components/opac/ReserveButton';
 import { getPublicBook } from '../../../../../lib/opac';
 
 export async function generateMetadata({ params }: { params: { tenant: string; id: string } }): Promise<Metadata> {
@@ -63,6 +64,10 @@ export default async function OPACTenantBookPage({ params }: { params: { tenant:
             <div><dt className="font-semibold">Exemplares</dt><dd>{book.available_copies}/{book.total_copies}</dd></div>
             <div><dt className="font-semibold">Status</dt><dd className={book.status === 'available' ? 'text-emerald-700 font-semibold' : 'text-rose-700 font-semibold'}>{book.status === 'available' ? 'Disponível' : 'Indisponível'}</dd></div>
           </dl>
+
+          <div className="flex flex-wrap gap-2">
+            <ReserveButton bookId={book.id} className="inline-flex rounded-md bg-slate-900 px-3 py-2 text-xs font-semibold text-white" />
+          </div>
 
           <div>
             <h2 className="text-lg font-semibold text-slate-900">Assuntos</h2>
