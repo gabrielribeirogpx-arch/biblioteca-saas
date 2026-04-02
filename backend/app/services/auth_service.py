@@ -38,7 +38,6 @@ class AuthService:
             "sub": str(payload.sub),
             "role": payload.role.value,
             "tenant_id": payload.tenant_id,
-            "library_id": payload.library_id,
             "tenant": payload.tenant,
             "organization_id": payload.organization_id,
         }
@@ -65,7 +64,6 @@ class AuthService:
                 sub=int(decoded["sub"]),
                 role=decoded["role"],
                 tenant_id=int(decoded["tenant_id"]),
-                library_id=int(decoded["library_id"]),
                 tenant=str(decoded["tenant"]),
                 organization_id=int(decoded["organization_id"]) if decoded.get("organization_id") is not None else None,
             )
@@ -131,7 +129,6 @@ class AuthService:
             token_payload = TokenPayload(
                 sub=user.id,
                 role=user.role,
-                library_id=user.library_id or tenant.id,
                 tenant_id=user.tenant_id or tenant.tenant_id or tenant.organization_id,
                 tenant=tenant.code,
                 organization_id=tenant.organization_id,
