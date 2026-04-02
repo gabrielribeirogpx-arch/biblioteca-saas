@@ -14,6 +14,7 @@ from app.models.library import Library
 from app.models.user import User
 from app.schemas.auth import LoginRequest, LoginUser, TokenPayload, TokenResponse
 from app.services.audit_service import AuditService
+from app.utils.slug import normalize_slug
 
 
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24  # 24 horas
@@ -33,12 +34,13 @@ class AuthService:
 
     @staticmethod
     def create_access_token(payload: TokenPayload) -> str:
+        normalized_tenant = normalize_slug(payload.tenant)
         to_encode = {
             # RFC 7519 expects "sub" as a string. PyJWT validates this claim type on decode.
             "sub": str(payload.sub),
             "role": payload.role.value,
             "tenant_id": payload.tenant_id,
-            "tenant": payload.tenant,
+            "tenant": normalized_tenant,
             "library_id": payload.library_id,
             "organization_id": payload.organization_id,
         }

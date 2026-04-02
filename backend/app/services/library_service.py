@@ -4,12 +4,13 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.library import Library
+from app.utils.slug import normalize_slug
 
 
 class LibraryService:
     @staticmethod
     def normalize_code(code: str) -> str:
-        return code.strip().lower()
+        return normalize_slug(code.strip())
 
     @staticmethod
     def normalize_name(name: str) -> str:
@@ -17,7 +18,7 @@ class LibraryService:
 
     @staticmethod
     def generate_code_from_name(name: str) -> str:
-        generated_code = "-".join(name.strip().lower().split())
+        generated_code = normalize_slug(name.strip())
         return generated_code[:64]
 
     @staticmethod
