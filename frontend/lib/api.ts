@@ -191,8 +191,9 @@ export function setStoredTenantId(tenantId: string) {
     return;
   }
 
-  window.localStorage.setItem('tenant', tenantId);
-  window.localStorage.setItem('tenant_id', tenantId);
+  const normalizedTenantId = tenantId.trim();
+  window.localStorage.setItem('tenant', normalizedTenantId);
+  window.localStorage.setItem('tenant_id', normalizedTenantId);
 }
 
 export function setStoredLibraryId(libraryId: string) {
@@ -268,13 +269,10 @@ export async function apiFetch<T = unknown>(url: string, options: RequestInit = 
 
   if (url.startsWith('/api/v1/')) {
     const tokenTenantId = tokenClaims && tokenClaims.tenant_id != null ? String(tokenClaims.tenant_id) : null;
-    const tokenTenantSlug = tokenClaims && tokenClaims.tenant != null ? String(tokenClaims.tenant) : null;
+    const effectiveTenantId = tokenTenantId ?? tenant;
 
     if (!headers.has('X-Tenant-ID')) {
-      headers.set('X-Tenant-ID', tokenTenantId ?? tenant);
-    }
-    if (!headers.has('X-Tenant-Slug')) {
-      headers.set('X-Tenant-Slug', tokenTenantSlug ?? tenant);
+      headers.set('X-Tenant-ID', effectiveTenantId);
     }
     if (libraryId && !headers.has('X-Library-ID')) {
       headers.set('X-Library-ID', libraryId);

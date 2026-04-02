@@ -165,6 +165,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
     const normalizedToken = data.access_token.trim().replace(/^Bearer\s+/i, '');
     const payload = parseTokenClaims(normalizedToken);
+    const tokenTenantId = payload?.tenant_id != null ? String(payload.tenant_id) : null;
     if (payload?.library_id) {
       setStoredLibraryId(String(payload.library_id));
       setLibraryIdState(String(payload.library_id));
@@ -176,7 +177,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       window.localStorage.setItem('token', normalizedToken);
       window.localStorage.setItem('user', JSON.stringify(data.user));
       window.localStorage.setItem('user_email', data.user.email);
-      setStoredTenantId(resolvedTenantId);
+      setStoredTenantId(tokenTenantId ?? resolvedTenantId);
     }
 
     setToken(normalizedToken);

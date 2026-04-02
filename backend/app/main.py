@@ -97,7 +97,7 @@ class RequestContextLoggingMiddleware(BaseHTTPMiddleware):
                 json.dumps(
                     {
                         "request_id": request_id,
-                        "tenant_id": getattr(tenant_context, "library_id", None),
+                        "tenant_id": getattr(tenant_context, "tenant_id", None),
                         "organization_id": getattr(tenant_context, "organization_id", None),
                         "library_id": getattr(tenant_context, "library_id", None),
                         "user_id": getattr(auth_context, "user_id", None),
@@ -114,7 +114,7 @@ class RequestContextLoggingMiddleware(BaseHTTPMiddleware):
                 json.dumps(
                     {
                         "request_id": request_id,
-                        "tenant_id": getattr(tenant_context, "library_id", None),
+                        "tenant_id": getattr(tenant_context, "tenant_id", None),
                         "organization_id": getattr(tenant_context, "organization_id", None),
                         "library_id": getattr(tenant_context, "library_id", None),
                         "user_id": getattr(auth_context, "user_id", None),
