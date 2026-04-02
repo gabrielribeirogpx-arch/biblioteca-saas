@@ -3,12 +3,46 @@
 import { useEffect, useMemo, useState } from 'react';
 
 import { useAuth } from '../context/AuthContext';
-import { getLibraries, type LibraryOption } from '../lib/api';
+import { apiFetch, getLibraries, type LibraryOption } from '../lib/api';
 
 interface StoredUser {
   email?: string;
   name?: string;
   full_name?: string;
+}
+
+function parseTenantIdFromToken(token: string | null): string | null {
+  if (!token) {
+    return null;
+  }
+
+  const [, payload] = token.split('.');
+  if (!payload) {
+    return null;
+  }
+
+  try {
+    const normalizedPayload = payload.replace(/-/g, '+').replace(/_/g, '/');
+    const claims = JSON.parse(atob(normalizedPayload)) as { tenant_id?: number | string };
+
+    if (claims.tenant_id == null) {
+      return null;
+    }
+
+    return String(claims.tenant_id);
+  } catch {
+    return null;
+  }
+}
+
+async function getDropdownLibraries(): Promise<LibraryOption[]> {
+  const libraries = await apiFetch<LibraryOption[]>('/libraries');
+
+  if (libraries && Array.isArray(libraries)) {
+    return libraries;
+  }
+
+  return getLibraries();
 }
 
 export function UserMenu() {
@@ -17,6 +51,7 @@ export function UserMenu() {
   const [email, setEmail] = useState('');
   const [name, setName] = useState('');
   const [tenant, setTenant] = useState('');
+  const [tenantId, setTenantId] = useState('');
   const [nextLibraryId, setNextLibraryId] = useState('');
   const [libraries, setLibraries] = useState<LibraryOption[]>([]);
 
@@ -28,6 +63,7 @@ export function UserMenu() {
     const storedTenant = window.localStorage.getItem('tenant') ?? window.localStorage.getItem('tenant_id') ?? '';
     const storedEmail = window.localStorage.getItem('user_email') ?? '';
     const rawUser = window.localStorage.getItem('user');
+    const token = window.localStorage.getItem('access_token') ?? window.localStorage.getItem('token');
 
     let parsedUser: StoredUser | null = null;
 
@@ -40,6 +76,7 @@ export function UserMenu() {
     }
 
     setTenant(storedTenant);
+    setTenantId(parseTenantIdFromToken(token) ?? '');
     setNextLibraryId(libraryId ?? '');
     setEmail(parsedUser?.email ?? storedEmail);
     setName(parsedUser?.name ?? parsedUser?.full_name ?? '');
@@ -57,15 +94,20 @@ export function UserMenu() {
       }
 
       try {
-        const tenantLibraries = await getLibraries();
+        const allLibraries = await getDropdownLibraries();
+
         if (!isMounted) {
           return;
         }
 
-        setLibraries(tenantLibraries);
+        const filteredLibraries = tenantId
+          ? allLibraries.filter((library) => String(library.tenant_id) === tenantId)
+          : allLibraries;
 
-        if (!libraryId && tenantLibraries.length > 0) {
-          const firstLibraryId = String(tenantLibraries[0].id);
+        setLibraries(filteredLibraries);
+
+        if (!libraryId && filteredLibraries.length > 0) {
+          const firstLibraryId = String(filteredLibraries[0].id);
           setLibraryId(firstLibraryId);
           setNextLibraryId(firstLibraryId);
         }
@@ -76,10 +118,12 @@ export function UserMenu() {
       }
     }
 
-    loadLibraries();
+    void loadLibraries();
+
     const handleLibrariesUpdated = () => {
       void loadLibraries();
     };
+
     if (typeof window !== 'undefined') {
       window.addEventListener('libraries:updated', handleLibrariesUpdated);
     }
@@ -90,7 +134,7 @@ export function UserMenu() {
         window.removeEventListener('libraries:updated', handleLibrariesUpdated);
       }
     };
-  }, [isAuthenticated, libraryId, setLibraryId]);
+  }, [isAuthenticated, libraryId, setLibraryId, tenantId]);
 
   const displayName = useMemo(() => {
     if (name.trim()) {
