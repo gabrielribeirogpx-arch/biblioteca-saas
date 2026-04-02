@@ -54,6 +54,53 @@ async def resolve_tenant(
     db: AsyncSession = Depends(get_db),
     x_library_id: str | None = Header(default=None, alias="X-Library-ID"),
 ) -> TenantContext:
+    forwarded_host = request.headers.get("x-forwarded-host", "")
+    host_header = forwarded_host.split(",")[0].strip() if forwarded_host else request.headers.get("host", "")
+    host_value = (host_header or "").strip().lower().rstrip(".")
+    if host_value.count(":") == 1:
+        host_value = host_value.split(":", 1)[0]
+
+    tenant_slug: str | None = None
+    host_parts = [part for part in host_value.split(".") if part]
+    if len(host_parts) >= 3:
+        tenant_slug = host_parts[0]
+
+    is_dev_host = host_value in {"localhost", "127.0.0.1", "0.0.0.0"} or host_value.endswith(".localhost")
+    if not tenant_slug and is_dev_host:
+        dev_tenant = request.query_params.get("tenant")
+        if dev_tenant and dev_tenant.strip():
+            tenant_slug = dev_tenant.strip().lower()
+
+    if tenant_slug:
+        library = (
+            await db.execute(
+                select(Library)
+                .options(selectinload(Library.organization))
+                .options(selectinload(Library.tenant))
+                .join(Library.tenant)
+                .where(Library.is_active.is_(True), Library.tenant.has(slug=tenant_slug))
+                .order_by(Library.id.asc())
+            )
+        ).scalars().first()
+        if not library:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tenant not found for host")
+
+        tenant_context = TenantContext(
+            tenant_id=library.tenant_id,
+            organization_id=library.organization_id,
+            organization_slug=library.organization.slug,
+            library_id=library.id,
+            library_code=library.code,
+        )
+        request.state.tenant_context = tenant_context
+        logger.info(
+            "tenant.resolve host success tenant=%s slug=%s library_id=%s",
+            tenant_context.tenant_id,
+            tenant_slug,
+            tenant_context.library_id,
+        )
+        return tenant_context
+
     if x_library_id and x_library_id.strip().isdigit():
         library = (
             await db.execute(
