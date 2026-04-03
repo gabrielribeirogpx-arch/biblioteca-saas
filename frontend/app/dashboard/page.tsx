@@ -86,7 +86,7 @@ export default function DashboardPage() {
     async function fetchDashboardData() {
       setState({ books: null, copies: null, loans: null, users: null, mostBorrowed: [], loading: true, error: null });
 
-      const books = await apiFetch<CollectionPayload<Book>>('/api/v1/books/?page=1&page_size=50');
+      const books = await apiFetch<CollectionPayload<Book>>('/api/v1/books?page=1&page_size=50');
 
       const copies = await apiFetch<CollectionPayload<Copy>>('/api/v1/copies/');
 

@@ -26,7 +26,7 @@ export default function CatalogPage() {
       return;
     }
 
-    apiFetch<{ items: Book[] }>('/api/v1/books/?page=1&page_size=50')
+    apiFetch<{ items: Book[] }>('/api/v1/books?page=1&page_size=50')
       .then((books) => {
         if (!isMounted || !books) {
           return;
