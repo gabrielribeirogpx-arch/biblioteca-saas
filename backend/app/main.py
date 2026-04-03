@@ -67,6 +67,8 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
                 except SQLAlchemyError:
                     logger.warning("Skipping default seeding because Organization query failed")
                     await db.rollback()
+
+    print("ROUTES:", [route.path for route in app.routes])
     yield
 
 
