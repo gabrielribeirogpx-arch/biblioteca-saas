@@ -316,6 +316,21 @@ function buildUrl(baseUrl: string, endpoint: string): string {
   return `${normalizedBase}${normalizedEndpoint}`;
 }
 
+function toggleTrailingSlash(endpoint: string): string {
+  if (/^https?:\/\//i.test(endpoint)) {
+    return endpoint;
+  }
+
+  const [path, query = ''] = endpoint.split('?', 2);
+  const normalizedPath = path.endsWith('/') ? path.slice(0, -1) : `${path}/`;
+  return query ? `${normalizedPath}?${query}` : normalizedPath;
+}
+
+function shouldRetryWithSlashVariant(url: string, options: RequestInit, status: number): boolean {
+  const method = (options.method ?? 'GET').toUpperCase();
+  return (method === 'GET' || method === 'HEAD') && url.startsWith('/api/v1/') && (status === 404 || status === 405);
+}
+
 export async function apiFetch<T = unknown>(url: string, options: RequestInit = {}): Promise<T | null> {
   const token = getStoredToken();
   let libraryId = getStoredLibraryId();
@@ -356,11 +371,22 @@ export async function apiFetch<T = unknown>(url: string, options: RequestInit = 
     headers.set('Authorization', `Bearer ${token}`);
   }
 
-  const response = await fetch(buildUrl(getApiBaseUrl(), url), {
+  const requestInit: RequestInit = {
     ...options,
     headers,
     cache: 'no-store'
-  });
+  };
+
+  let resolvedUrl = url;
+  let response = await fetch(buildUrl(getApiBaseUrl(), resolvedUrl), requestInit);
+
+  if (shouldRetryWithSlashVariant(url, options, response.status)) {
+    const fallbackUrl = toggleTrailingSlash(url);
+    if (fallbackUrl !== url) {
+      resolvedUrl = fallbackUrl;
+      response = await fetch(buildUrl(getApiBaseUrl(), resolvedUrl), requestInit);
+    }
+  }
 
   if (response.status === 401) {
     if (typeof window !== 'undefined') {
@@ -372,7 +398,7 @@ export async function apiFetch<T = unknown>(url: string, options: RequestInit = 
 
   if (!response.ok) {
     const body = await response.text();
-    throw new ApiError(`API request failed for ${url}`, response.status, body);
+    throw new ApiError(`API request failed for ${url} (resolved as ${resolvedUrl})`, response.status, body);
   }
 
   const contentType = response.headers.get('content-type') ?? '';
@@ -385,7 +411,7 @@ export async function apiFetch<T = unknown>(url: string, options: RequestInit = 
 }
 
 export async function getBooks(): Promise<Book[]> {
-  return (await apiFetch<PaginatedResponse<Book>>('/api/v1/books/?page=1&page_size=50'))?.items ?? [];
+  return (await apiFetch<PaginatedResponse<Book>>('/api/v1/books?page=1&page_size=50'))?.items ?? [];
 }
 
 export async function getCopies(): Promise<Copy[]> {
@@ -530,7 +556,7 @@ export class ApiClient {
   }
 
   listBooks(page = 1, pageSize = 20): Promise<PaginatedResponse<Book> | null> {
-    return this.request<PaginatedResponse<Book>>(`/books/?page=${page}&page_size=${pageSize}`);
+    return this.request<PaginatedResponse<Book>>(`/books?page=${page}&page_size=${pageSize}`);
   }
 
   listLoans(page = 1, pageSize = 20): Promise<PaginatedResponse<Loan> | null> {
