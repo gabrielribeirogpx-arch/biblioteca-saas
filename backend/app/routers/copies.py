@@ -1,11 +1,11 @@
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Query, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import (
     TenantScopedContext,
     get_current_user,
     get_db,
-    get_tenant_context,
+    resolve_context,
     require_librarian,
     require_user,
 )
@@ -18,13 +18,29 @@ from app.services.copies import CopyService
 router = APIRouter()
 
 
+@router.get("", response_model=list[CopyOut], dependencies=[Depends(get_current_user)], include_in_schema=False)
 @router.get("/", response_model=list[CopyOut], dependencies=[Depends(get_current_user)])
 async def list_copies(
     db: AsyncSession = Depends(get_db),
-    ctx: TenantScopedContext = Depends(get_tenant_context),
-    auth: User = Depends(require_user),
+    ctx: TenantScopedContext = Depends(resolve_context),
+    _: User = Depends(require_user),
 ) -> list[CopyOut]:
-    return await CopyService.list_copies(db, ctx.tenant.library_id, auth.tenant_id)
+    return await CopyService.list_copies(db, ctx.tenant.library_id, ctx.tenant.tenant_id)
+
+
+@router.get("/search", response_model=list[CopyOut], dependencies=[Depends(get_current_user)])
+async def search_copies(
+    query: str = Query(default="", min_length=0),
+    db: AsyncSession = Depends(get_db),
+    ctx: TenantScopedContext = Depends(resolve_context),
+    _: User = Depends(require_user),
+) -> list[CopyOut]:
+    return await CopyService.search_copies(
+        db=db,
+        library_id=ctx.tenant.library_id,
+        tenant_id=ctx.tenant.tenant_id,
+        query=query,
+    )
 
 
 @router.post("/", response_model=CopyOut, dependencies=[Depends(get_current_user)])
@@ -32,7 +48,7 @@ async def create_copy(
     payload: CopyCreate,
     request: Request,
     db: AsyncSession = Depends(get_db),
-    ctx: TenantScopedContext = Depends(get_tenant_context),
+    ctx: TenantScopedContext = Depends(resolve_context),
     auth: User = Depends(require_librarian),
 ) -> CopyOut:
     created = await CopyService.create_copy(db, payload, ctx.tenant.library_id)
