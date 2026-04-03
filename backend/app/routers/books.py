@@ -6,6 +6,7 @@ from app.api.deps import (
     get_current_user,
     get_db,
     get_tenant_context,
+    resolve_context,
     require_librarian,
     require_permission,
     require_user,
@@ -36,13 +37,13 @@ async def list_books(
     page: int = 1,
     page_size: int = 20,
     db: AsyncSession = Depends(get_db),
-    ctx: TenantScopedContext = Depends(get_tenant_context),
+    ctx: TenantScopedContext = Depends(resolve_context),
     auth: User = Depends(require_user),
 ) -> BookListResponse:
     return await BookService.list_books(
         db,
         ctx.tenant.library_id,
-        auth.tenant_id,
+        ctx.tenant.tenant_id,
         page=page,
         page_size=page_size,
     )
