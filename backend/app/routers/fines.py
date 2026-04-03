@@ -15,7 +15,7 @@ from app.services.fine_service import FineService
 router = APIRouter()
 
 
-@router.get('/', response_model=FineListResponse)
+@router.get('', response_model=FineListResponse)
 async def list_fines(
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=100),
