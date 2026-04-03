@@ -143,7 +143,11 @@ app.include_router(public_auth.router, prefix="/api/public", tags=["public-auth"
 app.include_router(public_books.router, prefix="/api/public", tags=["public-books"])
 app.include_router(books.router, prefix="/api/v1/books", tags=["books"])
 app.include_router(catalog.router, prefix="/api/v1/catalog", tags=["catalog"])
-app.include_router(copies.router, prefix="/api/v1/copies", tags=["copies"])
+app.include_router(
+    copies.router,
+    prefix="/api/v1/copies",
+    tags=["copies"],
+)
 app.include_router(loans.router, prefix="/api/v1/loans", tags=["loans"])
 app.include_router(loans.router, prefix="/api/loans", tags=["loans-compat"])
 app.include_router(users.router, prefix="/api/v1/users", tags=["users"])
