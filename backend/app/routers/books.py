@@ -32,7 +32,7 @@ from app.services.books import BookService
 router = APIRouter()
 
 
-@router.get("/", response_model=BookListResponse, dependencies=[Depends(get_current_user)])
+@router.get("", response_model=BookListResponse, dependencies=[Depends(get_current_user)])
 async def list_books(
     page: int = 1,
     page_size: int = 20,

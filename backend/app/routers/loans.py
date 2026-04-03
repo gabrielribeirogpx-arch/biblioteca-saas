@@ -18,7 +18,7 @@ from app.services.loans import LoanService
 router = APIRouter()
 
 
-@router.get("/", response_model=LoanListResponse, dependencies=[Depends(get_current_user)])
+@router.get("", response_model=LoanListResponse, dependencies=[Depends(get_current_user)])
 async def list_loans(
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=100),

@@ -20,8 +20,7 @@ from app.services.copies import CopyService
 router = APIRouter()
 
 
-@router.get("", response_model=list[CopyOut], dependencies=[Depends(get_current_user)], include_in_schema=False)
-@router.get("/", response_model=list[CopyOut], dependencies=[Depends(get_current_user)])
+@router.get("", response_model=list[CopyOut], dependencies=[Depends(get_current_user)])
 async def list_copies(
     db: AsyncSession = Depends(get_db),
     ctx: TenantScopedContext = Depends(resolve_context),

@@ -78,7 +78,7 @@ async def create_reservation(
     )
 
 
-@router.get('/', response_model=ReservationListResponse)
+@router.get('', response_model=ReservationListResponse)
 async def list_reservations(
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=100),
